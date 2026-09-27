@@ -2,18 +2,27 @@
 # -*- coding: utf-8 -*-
 """
 Claude Code の statusLine 用スクリプト。
-Claude Code が stdin に渡す JSON から rate_limits（5時間枠・7日枠の使用率とリセット時刻）だけを
-ローカルのキャッシュファイルに保存し、ステータスラインに短く表示します。
-会話内容・セッションID・パス等は保存しません。collector.py がこのキャッシュを読みます。
+- stdin の JSON から rate_limits（5時間枠・7日枠の使用率とリセット時刻）だけをローカルに保存
+  （会話内容・セッションID・パス等は保存しない）
+- 前回の collector 実行から10分以上経っていれば、collector.py（取得→push）を裏で起動（待たない）
+- ステータスラインには「5h 23% / 週 8%」のような短い行を表示
 """
 import datetime as dt
 import json
 import os
 import sys
 
-STATE_DIR = os.environ.get("AIUSAGE_STATE_DIR") or os.path.join(
-    os.environ.get("LOCALAPPDATA") or os.path.expanduser("~/.local/share"), "ai-usage-dashboard")
-CACHE = os.path.join(STATE_DIR, "claude_statusline.json")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import hooklib  # noqa: E402
+
+CACHE = os.path.join(hooklib.STATE_DIR, "claude_statusline.json")
+
+
+def fmt_pct(v):
+    try:
+        return "%d%%" % round(float(v))
+    except Exception:
+        return "--"
 
 
 def main():
@@ -21,7 +30,9 @@ def main():
         data = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace") or "{}")
     except Exception:
         data = {}
-    rl = data.get("rate_limits") if isinstance(data, dict) else None
+    if not isinstance(data, dict):
+        data = {}
+    rl = data.get("rate_limits")
     keep = {}
     if isinstance(rl, dict):
         for k in ("five_hour", "seven_day"):
@@ -30,7 +41,7 @@ def main():
                 keep[k] = {"used_percentage": w.get("used_percentage"), "resets_at": w.get("resets_at")}
     if keep:
         try:
-            os.makedirs(STATE_DIR, exist_ok=True)
+            os.makedirs(hooklib.STATE_DIR, exist_ok=True)
             tmp = CACHE + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump({"captured_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
@@ -38,16 +49,20 @@ def main():
             os.replace(tmp, CACHE)
         except Exception:
             pass
-    model = ((data.get("model") or {}).get("display_name") if isinstance(data, dict) else None) or "Claude"
+        try:
+            hooklib.maybe_spawn("claude-statusline")
+        except Exception:
+            pass
+
     parts = []
-    for k, label in (("five_hour", "5h"), ("seven_day", "7d")):
-        v = (keep.get(k) or {}).get("used_percentage")
-        if v is not None:
-            try:
-                parts.append("%s: %.0f%%" % (label, float(v)))
-            except Exception:
-                pass
-    sys.stdout.write("[%s]%s\n" % (model, (" | " + " ".join(parts)) if parts else ""))
+    if "five_hour" in keep:
+        parts.append("5h " + fmt_pct(keep["five_hour"].get("used_percentage")))
+    if "seven_day" in keep:
+        parts.append("週 " + fmt_pct(keep["seven_day"].get("used_percentage")))
+    model = (data.get("model") or {}).get("display_name") or ""
+    line = " / ".join(parts) if parts else "使用量: 次の応答後に表示"
+    out = ("[%s] " % model if model else "") + line + "\n"
+    sys.stdout.buffer.write(out.encode("utf-8"))
 
 
 if __name__ == "__main__":

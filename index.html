@@ -85,7 +85,7 @@
   <div class="banner" id="stale" hidden></div>
   <div id="cards"></div>
   <footer>
-    自動取得: PCのコレクターが約15分ごとに更新 ／ 「手入力」の値はこの端末のブラウザにだけ保存されます
+    自動取得: PCで Claude Code / Codex を使ったときに更新（最短10分間隔） ／ 「手入力」の値はこの端末のブラウザにだけ保存されます
   </footer>
 </main>
 
@@ -267,7 +267,7 @@ function updateMeta() {
   el.textContent = "最終取得: " + fmt(f) + "（" + ago(f) + "）";
   const staleMin = (Date.now() - f) / 60000;
   banner.hidden = staleMin <= STALE_MIN;
-  banner.textContent = "⚠ データが古い可能性があります（" + ago(f) + "に取得）。PCが起動していない、またはコレクターが停止しているかもしれません。";
+  banner.textContent = "⚠ データが古い可能性があります（" + ago(f) + "に取得）。更新は PC で Claude Code / Codex を使ったときだけ行われます（スマホでの利用分は未反映の可能性があります）。";
 }
 
 function tick() {

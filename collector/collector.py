@@ -11,6 +11,7 @@ AI usage-limit collector (Claude Code / Codex) -> data/usage.json
   python collector.py                 # 取得して data/usage.json を書き、git commit & push
   python collector.py --no-push       # 取得して書くだけ
   python collector.py --no-push --out C:\\temp\\usage.json --debug
+  python collector.py --throttle-min 10   # 前回実行から10分未満なら何もしない（フックから使用）
 """
 import argparse
 import datetime as dt
@@ -36,6 +37,16 @@ STATE_DIR = os.environ.get("AIUSAGE_STATE_DIR") or os.path.join(
     os.environ.get("LOCALAPPDATA") or os.path.expanduser("~/.local/share"), "ai-usage-dashboard")
 STATUSLINE_CACHE = os.path.join(STATE_DIR, "claude_statusline.json")
 LOG_FILE = os.path.join(STATE_DIR, "collector.log")
+STAMP_FILE = os.path.join(STATE_DIR, "last_run.stamp")
+LOCK_FILE = os.path.join(STATE_DIR, "collector.lock")
+
+# 公開リポジトリのコミットに個人のメールアドレスが載らないよう、GitHub の noreply アドレスで commit する
+GIT_IDENTITY = {
+    "GIT_AUTHOR_NAME": "ai-usage-collector",
+    "GIT_AUTHOR_EMAIL": "103965321+kimiharu-kitatani@users.noreply.github.com",
+    "GIT_COMMITTER_NAME": "ai-usage-collector",
+    "GIT_COMMITTER_EMAIL": "103965321+kimiharu-kitatani@users.noreply.github.com",
+}
 
 DEBUG = False
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -498,7 +509,11 @@ def collect_claude_statusline(svc, errors):
 
 # ---------------------------------------------------------------- git
 def git(*args, check=True):
-    r = subprocess.run(["git", "-C", REPO] + list(args), capture_output=True, timeout=120, creationflags=NO_WINDOW)
+    env = dict(os.environ)
+    env.update(GIT_IDENTITY)
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    r = subprocess.run(["git", "-C", REPO] + list(args), capture_output=True, timeout=120,
+                       creationflags=NO_WINDOW, env=env, stdin=subprocess.DEVNULL)
     if check and r.returncode != 0:
         raise RuntimeError("git %s failed: %s" % (" ".join(args), r.stderr.decode("utf-8", "replace").strip()[:300]))
     return r
@@ -516,6 +531,42 @@ def push(out_path):
     log("pushed")
 
 
+def acquire_lock(stale_sec=600):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    try:
+        if os.path.exists(LOCK_FILE) and time.time() - os.path.getmtime(LOCK_FILE) > stale_sec:
+            os.remove(LOCK_FILE)
+    except Exception:
+        pass
+    try:
+        fd = os.open(LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        return True
+    except FileExistsError:
+        return False
+
+
+def release_lock():
+    try:
+        os.remove(LOCK_FILE)
+    except Exception:
+        pass
+
+
+def minutes_since_last_run():
+    try:
+        return (time.time() - os.path.getmtime(STAMP_FILE)) / 60.0
+    except Exception:
+        return None
+
+
+def touch_stamp():
+    os.makedirs(STATE_DIR, exist_ok=True)
+    with open(STAMP_FILE, "w") as f:
+        f.write(dt.datetime.now(JST).isoformat(timespec="seconds"))
+
+
 def main():
     global DEBUG
     ap = argparse.ArgumentParser()
@@ -524,11 +575,30 @@ def main():
     ap.add_argument("--debug", action="store_true")
     ap.add_argument("--only", choices=["claude", "codex"])
     ap.add_argument("--try-claude-cli", action="store_true", help='claude -p "/usage" も試す（v2.1.220 では上限値は出ない）')
+    ap.add_argument("--throttle-min", type=float, default=0, help="前回実行からこの分数未満なら何もせず終了")
+    ap.add_argument("--reason", default="manual", help="ログ用の起動理由")
     a = ap.parse_args()
     global TRY_CLAUDE_CLI
     DEBUG = a.debug
     TRY_CLAUDE_CLI = a.try_claude_cli
 
+    if not acquire_lock():
+        log("別の collector が実行中のためスキップ (%s)" % a.reason)
+        return 0
+    try:
+        if a.throttle_min > 0:
+            m = minutes_since_last_run()
+            if m is not None and m < a.throttle_min:
+                return 0
+        if not a.no_push:
+            touch_stamp()
+        log("start (%s)" % a.reason)
+        return run(a)
+    finally:
+        release_lock()
+
+
+def run(a):
     data = {"schema": 1, "fetched_at": None, "services": {}}
     old = {}
     if os.path.exists(a.out):
