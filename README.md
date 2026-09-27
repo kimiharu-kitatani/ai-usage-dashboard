@@ -15,7 +15,7 @@ Claude Code（Claude Pro）と Codex（ChatGPT Plus）の利用上限の使用�
 | きっかけ | 何が起きるか |
 |---|---|
 | PC で Claude Code を使う（ステータスライン描画のたび） | `claude_statusline.py` が使用率とリセット時刻をローカルに記録し、ステータスラインに `5h 23% / 週 8%` と表示。前回の更新から **10分以上** 経っていれば `collector.py` を裏で起動（待たない） |
-| PC で Codex CLI のターンが終わる（`notify`） | `codex_notify.py` が同じく10分スロットルで `collector.py` を裏で起動 |
+| PC で Codex のターンが終わる（`notify` または Stop フック） | `codex_notify.py` が同じく10分スロットルで `collector.py` を裏で起動。**※このPCでは `notify` が既に Codex Computer Use に使われているため未登録**（下記「Codex のフックについて」） |
 | （任意）ログオン時に1回 | `setup_logon_task.ps1` で登録した場合のみ |
 
 `collector.py` は Codex の最新値を `codex app-server` から取得し、Claude はローカル記録を読み、`data/usage.json` だけを commit & push します（commit の作者は GitHub の noreply アドレス）。
@@ -59,9 +59,17 @@ python collector\install_hooks.py        # 未設定なら登録（既存設定�
 - 登録内容
   - `%USERPROFILE%\.claude\settings.json` → `"statusLine": {"type": "command", "command": "python C:/Users/<ユーザー>/ai-usage-dashboard/collector/claude_statusline.py"}`
   - `%USERPROFILE%\.codex\config.toml` → 先頭に `notify = ['<pythonw.exe>', '<clone先>\collector\codex_notify.py']`
-- 解除: `python collector\install_hooks.py --uninstall`（このリポジトリが登録した設定だけ外します）
+- 解除: `python collector\install_hooks.py --uninstall`（このリポジトリが登録した設定だけ外します。Stop フックは `--uninstall --only codex-stop`）
 - （任意）ログオン時に1回だけ更新: `powershell -NoProfile -ExecutionPolicy Bypass -File .\collector\setup_logon_task.ps1`
   （解除: `Unregister-ScheduledTask -TaskName "AI Usage Dashboard Logon" -Confirm:$false`）
+
+### Codex のフックについて
+
+Codex の `notify` は1つしか設定できません。既に別の用途（例: Codex Computer Use の `turn-ended`）で使われている場合、`install_hooks.py` は上書きしません。その場合の選択肢:
+
+1. **Stop フックを使う**（推奨）: `python collector\install_hooks.py --only codex-stop` で `~/.codex/hooks.json` に Stop フックを追加（既存フックは残す）。その後 Codex CLI で `/hooks` を開き、このフックを信頼（trust）すると有効になります
+2. ログオン時に1回だけ更新する（`setup_logon_task.ps1`）
+3. 何もしない: Claude Code 使用時の更新でも Codex の値は一緒に最新化されます
 
 ログ: `%LOCALAPPDATA%\ai-usage-dashboard\collector.log`
 スロットル間隔は環境変数 `AIUSAGE_THROTTLE_MIN`（分、既定 10）で変更できます。

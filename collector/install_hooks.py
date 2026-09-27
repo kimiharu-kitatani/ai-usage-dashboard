@@ -10,6 +10,8 @@ Claude Code の statusLine と Codex の notify に、このリポジトリの�
   python collector\\install_hooks.py --check      # 状態確認のみ（変更しない）
   python collector\\install_hooks.py              # 未設定なら登録
   python collector\\install_hooks.py --uninstall  # このリポジトリが登録した設定だけ外す
+  python collector\\install_hooks.py --only codex-stop   # notify が使えない場合: Codex の Stop フック（~/.codex/hooks.json）に登録
+                                                  # ※登録後、Codex CLI で /hooks を開いてフックを信頼(trust)する必要あり
 """
 import argparse
 import datetime as dt
@@ -22,7 +24,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOME = os.path.expanduser("~")
 CLAUDE_SETTINGS = os.path.join(HOME, ".claude", "settings.json")
-CODEX_CONFIG = os.path.join(os.environ.get("CODEX_HOME") or os.path.join(HOME, ".codex"), "config.toml")
+CODEX_HOME = os.environ.get("CODEX_HOME") or os.path.join(HOME, ".codex")
+CODEX_CONFIG = os.path.join(CODEX_HOME, "config.toml")
+CODEX_HOOKS = os.path.join(CODEX_HOME, "hooks.json")
 STATUSLINE_SCRIPT = os.path.join(HERE, "claude_statusline.py").replace("\\", "/")
 NOTIFY_SCRIPT = os.path.join(HERE, "codex_notify.py")
 MARK = "claude_statusline.py"
@@ -165,18 +169,71 @@ def codex(mode):
     print("[Codex] notify を設定しました: %s" % redact(line))
 
 
+# ------------------------------------------------------------ Codex Stop hook (hooks.json)
+def codex_stop(mode):
+    data = {}
+    if os.path.exists(CODEX_HOOKS):
+        try:
+            with open(CODEX_HOOKS, "r", encoding="utf-8-sig") as f:
+                txt = f.read()
+            data = json.loads(txt) if txt.strip() else {}
+        except Exception as e:
+            print("[Codex Stop] hooks.json を読めないため変更しません: %s" % e)
+            return
+    stops = ((data.get("hooks") or {}).get("Stop") or [])
+    ours = [g for g in stops if "codex_notify.py" in json.dumps(g)]
+    if mode == "check":
+        print("[Codex Stop] hooks.json: %s / Stop フック数: %d（うち本リポジトリ: %d）" % (
+            "あり" if os.path.exists(CODEX_HOOKS) else "なし", len(stops), len(ours)))
+        return
+    if mode == "uninstall":
+        if not ours:
+            print("[Codex Stop] 本リポジトリの Stop フックはありません（変更なし）")
+            return
+        print("[Codex Stop] バックアップ: %s" % redact(backup(CODEX_HOOKS)))
+        data["hooks"]["Stop"] = [g for g in stops if g not in ours]
+        if not data["hooks"]["Stop"]:
+            del data["hooks"]["Stop"]
+        write_any_json(CODEX_HOOKS, data)
+        print("[Codex Stop] 削除しました")
+        return
+    if ours:
+        print("[Codex Stop] 既に登録済みです（変更なし）")
+        return
+    if os.path.exists(CODEX_HOOKS):
+        print("[Codex Stop] バックアップ: %s" % redact(backup(CODEX_HOOKS)))
+    py, sc = pythonw(), NOTIFY_SCRIPT
+    cmd = ("%s %s" % (py, sc)) if " " not in py + sc else ('"%s" "%s"' % (py, sc))
+    data.setdefault("hooks", {}).setdefault("Stop", []).append(
+        {"hooks": [{"type": "command", "command": cmd, "timeout": 10}]})
+    write_any_json(CODEX_HOOKS, data)
+    print("[Codex Stop] Stop フックを追加しました（既存のフックはそのまま）: %s" % redact(cmd))
+    print("[Codex Stop] Codex CLI で /hooks を開き、このフックを信頼(trust)すると有効になります")
+
+
+def write_any_json(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    os.replace(tmp, path)
+
+
 def main():
     ap = argparse.ArgumentParser()
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--check", action="store_true")
     g.add_argument("--uninstall", action="store_true")
-    ap.add_argument("--only", choices=["claude", "codex"])
+    ap.add_argument("--only", choices=["claude", "codex", "codex-stop"])
     a = ap.parse_args()
     mode = "check" if a.check else "uninstall" if a.uninstall else "install"
     if a.only in (None, "claude"):
         claude(mode)
     if a.only in (None, "codex"):
         codex(mode)
+    if a.only == "codex-stop" or (a.only is None and mode != "install"):
+        codex_stop(mode)
 
 
 if __name__ == "__main__":
