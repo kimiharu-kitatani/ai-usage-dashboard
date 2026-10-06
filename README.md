@@ -72,6 +72,8 @@ Codex の `notify` は1つしか設定できません。既に別の用途（例
 3. 何もしない: Claude Code 使用時の更新でも Codex の値は一緒に最新化されます
 
 ログ: `%LOCALAPPDATA%\ai-usage-dashboard\collector.log`
+診断: `%LOCALAPPDATA%\ai-usage-dashboard\statusline_diag.json`（statusLine が最後に動いた時刻、Claude Code のバージョン、`rate_limits` が来ているか（`dict` / `null` / `absent`）だけを記録）。
+`rate_limits` が `null` / `absent` の場合、Claude Code 側が使用率を渡していないため Claude の自動取得はできません（Pro で発生する既知の不具合: anthropics/claude-code#59462 ほか）。その場合でも Claude Code 使用時に Codex の値は更新されます。
 スロットル間隔は環境変数 `AIUSAGE_THROTTLE_MIN`（分、既定 10）で変更できます。
 
 ## スマホで使う
