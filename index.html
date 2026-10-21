@@ -63,6 +63,13 @@
   .bar { height: 5px; background: var(--track); border-radius: 999px; overflow: hidden; margin: 2px 0 3px; }
   .bar > span { display: block; height: 100%; width: 0; border-radius: 999px; background: var(--ok); transition: width .4s; }
   .bar.warn > span { background: var(--warn); } .bar.bad > span { background: var(--bad); }
+  .donut { --p: 0; --c: var(--track); width: 72px; height: 72px; border-radius: 50%; margin: 3px auto 2px; background: conic-gradient(var(--c) calc(var(--p) * 1%), var(--track) 0); display: grid; place-items: center; }
+  .donut::before { content: ""; grid-area: 1/1; width: 74%; height: 74%; border-radius: 50%; background: var(--card); }
+  .donut .dv { grid-area: 1/1; z-index: 1; text-align: center; line-height: 1.05; }
+  .donut .dv b { font-size: 17px; font-variant-numeric: tabular-nums; } .donut .dv small { display: block; font-size: 9px; color: var(--muted); }
+  .donut.na-ring .dv b { font-size: 11px; color: var(--muted); }
+  .row-head { justify-content: center; } .reset { text-align: center; }
+  @media (min-width: 700px) { .donut { width: 110px; height: 110px; } .donut .dv b { font-size: 26px; } .donut .dv small { font-size: 11px; } }
   .reset { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .countdown { font-weight: 600; color: var(--text); white-space: nowrap; }
   .sub { color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -191,19 +198,21 @@ function windowRow(label, autoW, manW, manSavedAt, autoAsOf) {
   const p = pick(num(autoW && autoW.used_percent), num(manW && manW.used_percent), manSavedAt, autoAsOf);
   const r = pick(autoW && autoW.resets_at, manW && manW.resets_at, manSavedAt, autoAsOf);
   const row = document.createElement("div"); row.className = "row";
-  const pct = p.v;
-  const cls = pct === null ? "" : pct >= 90 ? "bad" : pct >= 70 ? "warn" : "";
+  const used = p.v;
+  const rem = used === null ? null : Math.min(100, Math.max(0, 100 - used));
+  const color = rem === null ? "var(--track)" : rem >= 50 ? "#3b82f6" : rem >= 20 ? "#eab308" : "#ef4444";
   const d = toDate(r.v);
   row.innerHTML =
     '<div class="row-head"><span class="label"></span><span class="val"></span></div>' +
-    '<div class="bar ' + cls + '"><span></span></div>' +
+    '<div class="donut"><div class="dv"></div></div>' +
     '<div class="reset">↻ <span class="rt"></span> <span class="countdown" data-t=""></span></div>';
   row.querySelector(".label").textContent = label;
-  const val = row.querySelector(".val");
-  if (pct === null) { val.innerHTML = '<span class="na"></span>'; val.firstChild.textContent = NA; }
-  else { val.innerHTML = '<span class="pct"></span>'; val.firstChild.innerHTML = (Math.round(pct * 10) / 10) + "<small>%</small>"; }
-  if (p.manual) val.insertAdjacentHTML("beforeend", '<span class="badge">手入力</span>');
-  row.querySelector(".bar > span").style.width = (pct === null ? 0 : Math.min(100, Math.max(0, pct))) + "%";
+  const dn = row.querySelector(".donut"), dv = row.querySelector(".dv");
+  dn.style.setProperty("--p", rem === null ? 0 : rem);
+  dn.style.setProperty("--c", color);
+  if (rem === null) { dn.classList.add("na-ring"); dv.innerHTML = "<b>取得なし</b>"; }
+  else { dv.innerHTML = "<b>" + (Math.round(rem * 10) / 10) + "%</b><small>残り</small>"; }
+  if (p.manual) row.querySelector(".val").insertAdjacentHTML("beforeend", '<span class="badge">手入力</span>');
   row.querySelector(".rt").textContent = fmt(d);
   if (r.manual && d) row.querySelector(".rt").insertAdjacentHTML("afterend", '<span class="badge">手入力</span>');
   const cd = row.querySelector(".countdown");
@@ -249,6 +258,8 @@ function render() {
     srcEl.title = (auto.source ? "取得元: " + auto.source + "\n" : "") + src.join("\n");
     const noAuto = auto.five_hour == null || (num(auto.five_hour.used_percent) === null && num(auto.weekly && auto.weekly.used_percent) === null);
     const errEl = node.querySelector(".err");
+    const asOfD = toDate(auto.as_of);
+    if (!noAuto && asOfD && (Date.now() - asOfD) / 3600000 > 6) node.querySelector(".note").textContent = "古い値（" + fmt(asOfD) + " 時点）";
     if (s.key === "claude" && noAuto) {
       node.querySelector(".note").textContent = man ? "自動取得不可・手入力値を表示" : "自動取得不可・手入力で表示";
       errEl.textContent = "";
