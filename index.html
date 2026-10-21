@@ -99,18 +99,31 @@
     .sub, .src, .err { font-size: 11px; } .note { font-size: 12px; } button, .btn { font-size: 12px; padding: 4px 9px; }
   }
   /* compact view */
-  #mini { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; grid-auto-flow: column; column-gap: 12px; row-gap: 2px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px 4px; cursor: pointer; }
-  .mcell { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 4px; } .mcell { flex-wrap: wrap; row-gap: 0; padding: 3px 4px; } .mcell .mlab { width: 100%; font-size: 11px; } .mcell .batt { flex: 1; height: 24px; margin: 2px 7px 2px 0; } .mcell .bt { display: none; } .mpct { font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: right; } .mpct.na { font-size: 11px; color: var(--muted); }
-  .mlab { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .mlab b { color: var(--text); }
-  #toggle { font-size: 11px; }
-  #cards { display: none; }
-  body.expanded #cards { display: grid; margin-top: 6px; }
-  body.expanded #mini { display: none; }
-  header { margin-bottom: 4px !important; flex-wrap: nowrap !important; } header .meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; } #stale { overflow: hidden; text-overflow: ellipsis; min-width: 0; } h1 { font-size: 13px !important; white-space: nowrap; }
+  .ico { width: 16px; height: 16px; flex: none; display: block; }
+  #strip { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 4px 6px; }
+  .mg { display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
+  .mg + .mg { border-left: 1px solid var(--line); padding-left: 8px; }
+  .wl { font-size: 10px; color: var(--muted); font-weight: 600; margin-left: 2px; }
+  .mb { position: relative; width: 26px; height: 12px; border: 1.5px solid var(--muted); border-radius: 3px; padding: 1px; margin-right: 3px; }
+  .mb::after { content: ""; position: absolute; right: -4px; top: 3px; width: 2px; height: 4px; background: var(--muted); border-radius: 0 1px 1px 0; }
+  .mb .fill { height: 100%; border-radius: 1px; background: var(--c, var(--track)); }
+  .mb.na-ring { border-style: dashed; }
+  .mp { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 2.6em; }
+  .mp.na { font-size: 9px; color: var(--muted); font-weight: 600; }
+  .mmeta { margin-left: auto; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .mmeta .t { font-size: 10px; color: var(--muted); }
+  .mmeta button { font-size: 10px; padding: 1px 5px; }
+  #det { display: none; margin-top: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 4px 7px; font-size: 11px; line-height: 1.45; }
+  body.expanded #det { display: block; }
+  .dsv { display: flex; gap: 5px; align-items: flex-start; } .dsv + .dsv { border-top: 1px solid var(--line); margin-top: 3px; padding-top: 3px; }
+  .dsv .ico { margin-top: 1px; } .dsv > div { min-width: 0; flex: 1; }
+  .dl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+  .dl .k { color: var(--muted); font-weight: 600; } .dl.sub2 { color: var(--muted); font-size: 10px; }
+  .dl .old { color: var(--warn); font-weight: 700; } .dl a, .dl .lnk { color: var(--accent); background: none; border: 0; padding: 0; font-size: 10px; cursor: pointer; text-decoration: underline; }
+  #cards, header { display: none; }
   @media (min-width: 700px) and (min-height: 500px) {
-    #mini, #toggle { display: none !important; } #cards { display: grid !important; }
-    h1 { font-size: 17px !important; }
+    #strip, #det { display: none !important; } #cards { display: grid !important; } header { display: flex !important; }
+    h1 { font-size: 17px; }
   }
 </style>
 </head>
@@ -121,10 +134,10 @@
     <span class="meta" id="fetched" title="自動取得: PCで Claude Code / Codex を使ったときに更新（最短10分間隔）">読み込み中…</span>
     <span class="stale" id="stale" hidden></span>
     <span class="spacer"></span>
-    <button id="toggle" type="button" aria-expanded="false">詳細 ▼</button>
     <button id="reload" type="button" aria-label="再読み込み">↻</button>
   </header>
-  <div id="mini" title="タップで詳細"></div>
+  <div id="strip"></div>
+  <div id="det"></div>
   <div id="cards"></div>
 </main>
 
@@ -170,6 +183,11 @@ const SERVICES = [
   { key: "codex", name: "Codex", plan: "ChatGPT Plus", url: "https://chatgpt.com/codex/settings/usage", rcNote: "" },
 ];
 const STALE_MIN = 30;
+const ICONS = {
+  claude: '<svg class="ico" viewBox="0 0 24 24" aria-label="Claude"><g stroke="#D97757" stroke-width="2.6" stroke-linecap="round">' +
+    [0,30,60,90,120,150].map(a => '<line x1="12" y1="2.5" x2="12" y2="21.5" transform="rotate(' + a + ' 12 12)"/>').join("") + '</g></svg>',
+  codex: '<svg class="ico" viewBox="0 0 24 24" aria-label="Codex"><rect x="1" y="1" width="22" height="22" rx="6" fill="#111"/><path d="M6.5 8l4 4-4 4" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12.5" y1="16.5" x2="17.5" y2="16.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>',
+};
 const NA = "取得できません";
 const LS_KEY = (k) => "aiusage.manual." + k;
 let DATA = null;
@@ -240,7 +258,8 @@ function render() {
   const wrap = document.getElementById("cards");
   wrap.textContent = "";
   const tpl = document.getElementById("card-tpl");
-  const mini = document.getElementById("mini"); mini.textContent = "";
+  const strip = document.getElementById("strip"); strip.textContent = "";
+  const det = document.getElementById("det"); det.textContent = "";
   SERVICES.forEach(s => {
     const node = tpl.content.firstElementChild.cloneNode(true);
     const auto = (DATA && DATA.services && DATA.services[s.key]) || {};
@@ -250,17 +269,11 @@ function render() {
     node.querySelector(".name").textContent = s.name;
     node.querySelector(".plan").textContent = s.plan;
     const rows = node.querySelector(".rows");
-    [["5h", "5時間枠", "five_hour"], ["週", "週間枠", "weekly"]].forEach(([sl, ll, k]) => {
+    const wins = [];
+    [["5h", "5時間枠", "five_hour"], ["1w", "週間枠", "weekly"]].forEach(([sl, ll, k]) => {
       const r1 = windowRow(ll, auto[k], man && man[k], manSavedAt, autoAsOf);
       rows.appendChild(r1);
-      const mc = document.createElement("div"); mc.className = "mcell";
-      const lb = document.createElement("div"); lb.className = "mlab";
-      lb.innerHTML = "<b></b> "; lb.firstChild.textContent = s.name.split(" ")[0]; lb.appendChild(document.createTextNode(ll));
-      mc.appendChild(lb);
-      const b = r1.querySelector(".batt").cloneNode(true);
-      const mp = document.createElement("span"); const t = b.querySelector(".bt").textContent;
-      mp.className = "mpct" + (t.startsWith("残り") ? "" : " na"); mp.textContent = t.replace("残り ", "");
-      mc.appendChild(b); mc.appendChild(mp); mini.appendChild(mc);
+      wins.push({ sl, row: r1 });
     });
 
     // リセット回数
@@ -276,6 +289,43 @@ function render() {
     if (s.rcNote) subs.push(s.rcNote);
     rr.querySelector(".sub").textContent = subs.join(" ／ ");
     rows.appendChild(rr);
+    // compact strip + terse details
+    const g = document.createElement("div"); g.className = "mg"; g.title = s.name + "（タップで詳細）";
+    g.innerHTML = ICONS[s.key];
+    const dv = document.createElement("div"); dv.className = "dsv"; dv.innerHTML = ICONS[s.key] + "<div></div>";
+    const dbox = dv.lastChild;
+    wins.forEach(({ sl, row }) => {
+      const src = row.querySelector(".batt"), t = src.querySelector(".bt").textContent, na = !t.startsWith("残り");
+      const mb = document.createElement("span"); mb.className = "mb" + (na ? " na-ring" : "");
+      mb.style.setProperty("--c", src.style.getPropertyValue("--c"));
+      mb.innerHTML = '<div class="fill"></div>'; mb.firstChild.style.width = src.querySelector(".fill").style.width;
+      const wl = document.createElement("span"); wl.className = "wl"; wl.textContent = sl;
+      const mp = document.createElement("span"); mp.className = "mp" + (na ? " na" : ""); mp.textContent = na ? "取得なし" : t.replace("残り ", "");
+      g.append(wl, mb, mp);
+      const cd = row.querySelector(".countdown");
+      const l = document.createElement("div"); l.className = "dl";
+      l.innerHTML = '<span class="k"></span> ↻ <span class="rt"></span> <span class="countdown"></span>';
+      l.querySelector(".k").textContent = sl + " " + (na ? "取得なし" : t.replace("残り ", ""));
+      l.querySelector(".rt").textContent = row.querySelector(".rt").textContent;
+      const c2 = l.querySelector(".countdown"); if (cd.dataset.t) { c2.dataset.t = cd.dataset.t; c2.textContent = cd.textContent; }
+      dbox.appendChild(l);
+    });
+    g.addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
+    strip.appendChild(g);
+    const l3 = document.createElement("div"); l3.className = "dl sub2";
+    const a3 = toDate(auto.as_of);
+    const parts = [];
+    if (a3) parts.push("値 " + fmt(a3) + "（" + ago(a3) + "）");
+    else parts.push("値の時点 不明");
+    parts.push("リセット回数 " + (rc.v === null ? "取得なし" : rc.v + "回"));
+    l3.textContent = parts.join(" · ") + " · ";
+    if (a3 && (Date.now() - a3) / 3600000 > 6) { const o = document.createElement("span"); o.className = "old"; o.textContent = "古い値 · "; l3.prepend(o); }
+    if (auto.error) { const e = document.createElement("span"); e.className = "old"; e.textContent = "⚠ "; e.title = auto.error; l3.prepend(e); }
+    const lk = document.createElement("a"); lk.href = s.url; lk.target = "_blank"; lk.rel = "noopener"; lk.textContent = "公式";
+    const mi = document.createElement("button"); mi.type = "button"; mi.className = "lnk"; mi.textContent = "手入力"; mi.addEventListener("click", () => openManual(s));
+    l3.append(lk, " ", mi);
+    dbox.appendChild(l3);
+    det.appendChild(dv);
 
     const src = [];
     if (auto.as_of) { const a = toDate(auto.as_of); if (a) src.push("値の時点 " + fmt(a) + "（" + ago(a) + "）"); }
@@ -300,6 +350,12 @@ function render() {
     if (man) node.querySelector(".open-manual").insertAdjacentHTML("beforeend", '<span class="badge">保存済</span>');
     wrap.appendChild(node);
   });
+  const mm = document.createElement("div"); mm.className = "mmeta";
+  mm.innerHTML = '<span class="t" id="mtime"></span><button type="button" id="mtoggle"></button><button type="button" id="mreload" aria-label="再読み込み">↻</button>';
+  strip.appendChild(mm);
+  mm.querySelector("#mtoggle").addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
+  mm.querySelector("#mreload").addEventListener("click", () => load());
+  setExpanded(document.body.classList.contains("expanded"), true);
   updateMeta();
 }
 
@@ -349,17 +405,29 @@ function updateMeta() {
     return;
   }
   el.textContent = fmt(f) + "（" + ago(f) + "）"; el.title = "最終取得 " + fmt(f);
+  const mt = document.getElementById("mtime"); if (mt) { mt.textContent = fmt(f).replace(/^.*?\) ?/, "") + ((Date.now() - f) / 60000 > STALE_MIN ? " ⚠" : ""); mt.title = "最終取得 " + fmt(f) + "（" + ago(f) + "）"; }
   badge.hidden = (Date.now() - f) / 60000 <= STALE_MIN;
   badge.textContent = "⚠ 古い";
   badge.title = ago(f) + "に取得。更新は PC で Claude Code / Codex を使ったときだけ行われます（スマホでの利用分は未反映の可能性）。";
 }
 
-function setExpanded(on) {
+let BASE_H = null;
+function setExpanded(on, quiet) {
   document.body.classList.toggle("expanded", on);
-  const t = document.getElementById("toggle"); t.textContent = on ? "詳細 ▲" : "詳細 ▼"; t.setAttribute("aria-expanded", on);
+  const t = document.getElementById("mtoggle"); if (t) { t.textContent = on ? "詳細 ▲" : "詳細 ▼"; t.setAttribute("aria-expanded", on); }
+  if (quiet) return;
+  // Edge/Chrome の --app ウィンドウでは内容に合わせて高さを変える（スマホでは無視される）
+  try {
+    if (window.innerWidth < 700 && !/Mobi|Android|iPhone/.test(navigator.userAgent)) {
+      const chrome = window.outerHeight - window.innerHeight;
+      requestAnimationFrame(() => {
+        const need = Math.ceil(document.querySelector("main").getBoundingClientRect().bottom + 10);
+        if (on) { if (BASE_H === null) BASE_H = window.outerHeight; if (need > window.innerHeight) window.resizeTo(window.outerWidth, need + chrome); }
+        else if (BASE_H !== null) { window.resizeTo(window.outerWidth, BASE_H); BASE_H = null; }
+      });
+    }
+  } catch (e) {}
 }
-document.getElementById("toggle").addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
-document.getElementById("mini").addEventListener("click", () => setExpanded(true));
 
 function tick() {
   document.querySelectorAll(".countdown[data-t]").forEach(el => {
@@ -382,6 +450,7 @@ async function load() {
 
 document.getElementById("reload").addEventListener("click", load);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+if (location.hash === "#detail") document.body.classList.add("expanded");
 setInterval(tick, 15000);
 setInterval(load, 5 * 60000);
 load();
