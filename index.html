@@ -100,7 +100,7 @@
   }
   /* compact view */
   .ico { width: 16px; height: 16px; flex: none; display: block; }
-  #strip { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 4px 6px; }
+  #strip { display: inline-flex; max-width: 100%; flex-wrap: wrap; align-items: center; gap: 3px 8px; background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 4px 6px; }
   .mg { display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
   .mg + .mg { border-left: 1px solid var(--line); padding-left: 8px; }
   .wl { font-size: 10px; color: var(--muted); font-weight: 600; margin-left: 2px; }
@@ -113,7 +113,7 @@
   .mmeta { margin-left: auto; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
   .mmeta .t { font-size: 10px; color: var(--muted); }
   .mmeta button { font-size: 10px; padding: 1px 5px; }
-  #det { display: none; margin-top: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 4px 7px; font-size: 11px; line-height: 1.45; }
+  #det { display: none; width: fit-content; max-width: 100%; margin-top: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 4px 7px; font-size: 11px; line-height: 1.45; }
   body.expanded #det { display: block; }
   .dsv { display: flex; gap: 5px; align-items: flex-start; } .dsv + .dsv { border-top: 1px solid var(--line); margin-top: 3px; padding-top: 3px; }
   .dsv .ico { margin-top: 1px; } .dsv > div { min-width: 0; flex: 1; }
