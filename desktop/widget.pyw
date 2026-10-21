@@ -9,6 +9,7 @@ STATE = os.path.join(os.environ.get("LOCALAPPDATA", HERE), "ai-usage-dashboard")
 POS = os.path.join(STATE, "widget.json")
 JST = dt.timezone(dt.timedelta(hours=9))
 DM = "#c9ced8"
+BG_ALPHA = 0.25  # 1行表示の背景の濃さ（0=透明〜1=不透明）
 KEY = "#010203"  # 透明にする色（他では使わない）
 HALO = "#000000"
 BG, FG, MUTED, LINE, TRACK = "#1b1e25", "#e8eaf0", "#9aa1ae", "#3a3f4b", "#4b5060"
@@ -66,21 +67,29 @@ class W:
         self.fs = tkfont.Font(family="Yu Gothic UI", size=8)
         self.fd = tkfont.Font(family="Yu Gothic UI", size=11)
         self.fdb = tkfont.Font(family="Yu Gothic UI", size=11, weight="bold")
+        # 半透明の背景用ウィンドウ（本体の真後ろに置き、一緒に動かす）
+        self.bgw = tk.Toplevel(self.r); self.bgw.overrideredirect(True); self.bgw.configure(bg=BG)
+        try: self.bgw.attributes("-alpha", BG_ALPHA); self.bgw.attributes("-topmost", True)
+        except Exception: pass
+        self.row_w, self.row_h = 10, 10
         self.c = tk.Canvas(self.r, bg=KEY, highlightthickness=0, bd=0)
         self.c.pack()
         import sys
         self.detail = "--detail" in sys.argv; self.data = None
         self.busy = False; self.status = None; self.err = None; self.spin = 0; self.tip = None
-        self.c.bind("<ButtonPress-1>", self.start); self.c.bind("<B1-Motion>", self.move)
-        self.c.bind("<ButtonRelease-1>", self.save_pos); self.c.bind("<Double-Button-1>", lambda e: self.toggle())
+        for wdg in (self.c, self.bgw):
+            wdg.bind("<ButtonPress-1>", self.start); wdg.bind("<B1-Motion>", self.move)
+            wdg.bind("<ButtonRelease-1>", self.save_pos); wdg.bind("<Double-Button-1>", lambda e: self.toggle())
+        self.r.bind("<Configure>", lambda e: self.sync_bg())
         self.m = tk.Menu(self.r, tearoff=0)
         self.m.add_command(label="詳細", command=self.toggle)
         self.m.add_command(label="更新", command=self.reload)
         self.m.add_separator(); self.m.add_command(label="閉じる", command=self.close)
         self.r.protocol("WM_DELETE_WINDOW", self.close)
         self.c.bind("<Button-3>", lambda e: self.m.tk_popup(e.x_root, e.y_root))
+        self.bgw.bind("<Button-3>", lambda e: self.m.tk_popup(e.x_root, e.y_root))
         for k, d in (("<Left>", (-1, 0)), ("<Right>", (1, 0)), ("<Up>", (0, -1)), ("<Down>", (0, 1))):
-            self.r.bind(k, lambda e, d=d: self.snap(*d))
+            self.r.bind(k, lambda e, d=d: self.snap(*d)); self.bgw.bind(k, lambda e, d=d: self.snap(*d))
         self.first = False
         try:
             p = json.load(open(POS, encoding="utf-8")); self.r.geometry(f"+{int(p['x'])}+{int(p['y'])}")
@@ -89,7 +98,7 @@ class W:
             try: self.r.attributes("-alpha", 0.0)
             except Exception: pass
         self.reload(); self.loop()
-        self.r.after(300, self.r.focus_force)
+        self.r.after(300, self.r.focus_force); self.r.after(500, self.keep_bg)
 
     def hwnd(self):
         try: return ctypes.windll.user32.GetAncestor(self.r.winfo_id(), 2) or self.r.winfo_id()
@@ -114,12 +123,21 @@ class W:
         self.home = None
         self.r.geometry(f"+{x}+{y}"); self.save_pos(xy=(x, y))
 
+    def sync_bg(self):
+        try:
+            self.bgw.geometry(f"{self.row_w}x{self.row_h}+{self.r.winfo_x()}+{self.r.winfo_y()}")
+            self.r.lift(); self.bgw.lower(self.r)
+        except Exception: pass
+
+    def keep_bg(self):
+        self.sync_bg(); self.r.after(1500, self.keep_bg)
+
     def start(self, e):
-        self.r.focus_force()
+        self.r.focus_force(); self.sync_bg()
         self.dx, self.dy = e.x_root - self.r.winfo_x(), e.y_root - self.r.winfo_y()
     def move(self, e):
         self.home = None
-        self.r.geometry(f"+{e.x_root - self.dx}+{e.y_root - self.dy}")
+        self.r.geometry(f"+{e.x_root - self.dx}+{e.y_root - self.dy}"); self.sync_bg()
     def save_pos(self, e=None, xy=None):
         try:
             os.makedirs(STATE, exist_ok=True)
@@ -200,6 +218,7 @@ class W:
         width = x - 2 + PAD
         height = PAD * 2 + H
         self._halo = False
+        self.row_w, self.row_h = width, height
         if self.detail:
             fd, fdb = self.fd, self.fdb
             self._panel = c.create_rectangle(0, PAD + H + 1, 2000, 2000, fill=BG, outline=LINE)
@@ -237,6 +256,7 @@ class W:
             height = yy + PAD + 2
             c.coords(self._panel, 0, PAD + H + 1, width - 1, height - 1)
         c.config(width=width, height=height)
+        self.sync_bg()
         self.r.after(10, self.clamp)
 
     def rel_label(self):
