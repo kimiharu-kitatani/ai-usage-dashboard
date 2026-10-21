@@ -1,20 +1,20 @@
 {
   "schema": 1,
-  "fetched_at": "2026-10-21T21:57:58+09:00",
+  "fetched_at": "2026-10-21T22:15:32+09:00",
   "services": {
     "claude": {
       "five_hour": {
-        "used_percent": null,
-        "resets_at": null
+        "used_percent": 5.0,
+        "resets_at": "2026-10-22T01:50:00+09:00"
       },
       "weekly": {
-        "used_percent": null,
-        "resets_at": null
+        "used_percent": 15.0,
+        "resets_at": "2026-10-26T09:00:00+09:00"
       },
       "reset_count": null,
-      "source": null,
-      "as_of": null,
-      "error": "Claude の値がまだ記録されていません（statusLine に claude_statusline.py を設定し、PC で Claude Code を使うと記録されます）"
+      "source": "Claude Code statusline (最後に Claude Code を使った時点の値)",
+      "as_of": "2026-10-21T22:00:59+09:00",
+      "error": null
     },
     "codex": {
       "five_hour": {
@@ -27,7 +27,7 @@
       },
       "reset_count": 2,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-10-21T21:57:58+09:00",
+      "as_of": "2026-10-21T22:15:32+09:00",
       "error": null,
       "reset_count_expires_at": "2026-10-30T01:38:03+09:00"
     }
