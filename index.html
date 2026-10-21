@@ -63,13 +63,13 @@
   .bar { height: 5px; background: var(--track); border-radius: 999px; overflow: hidden; margin: 2px 0 3px; }
   .bar > span { display: block; height: 100%; width: 0; border-radius: 999px; background: var(--ok); transition: width .4s; }
   .bar.warn > span { background: var(--warn); } .bar.bad > span { background: var(--bad); }
-  .donut { --p: 0; --c: var(--track); width: 72px; height: 72px; border-radius: 50%; margin: 3px auto 2px; background: conic-gradient(var(--c) calc(var(--p) * 1%), var(--track) 0); display: grid; place-items: center; }
-  .donut::before { content: ""; grid-area: 1/1; width: 74%; height: 74%; border-radius: 50%; background: var(--card); }
-  .donut .dv { grid-area: 1/1; z-index: 1; text-align: center; line-height: 1.05; }
-  .donut .dv b { font-size: 17px; font-variant-numeric: tabular-nums; } .donut .dv small { display: block; font-size: 9px; color: var(--muted); }
-  .donut.na-ring .dv b { font-size: 11px; color: var(--muted); }
+  .batt { position: relative; height: 26px; margin: 4px 7px 3px 0; border: 2px solid var(--muted); border-radius: 6px; padding: 2px; }
+  .batt::after { content: ""; position: absolute; right: -7px; top: 50%; transform: translateY(-50%); width: 4px; height: 45%; background: var(--muted); border-radius: 0 3px 3px 0; }
+  .batt .fill { height: 100%; width: 0; border-radius: 3px; background: var(--c, var(--track)); transition: width .4s; }
+  .batt .bt { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; text-shadow: 0 0 3px var(--card), 0 0 3px var(--card); }
+  .batt.na-ring { border-style: dashed; } .batt.na-ring .bt { font-size: 11px; color: var(--muted); }
+  @media (min-width: 700px) { .batt { height: 36px; } .batt .bt { font-size: 18px; } }
   .row-head { justify-content: center; } .reset { text-align: center; }
-  @media (min-width: 700px) { .donut { width: 110px; height: 110px; } .donut .dv b { font-size: 26px; } .donut .dv small { font-size: 11px; } }
   .reset { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .countdown { font-weight: 600; color: var(--text); white-space: nowrap; }
   .sub { color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -98,6 +98,20 @@
     .na { font-size: 14px; } .bar { height: 7px; margin: 4px 0 4px; } .reset { font-size: 13px; }
     .sub, .src, .err { font-size: 11px; } .note { font-size: 12px; } button, .btn { font-size: 12px; padding: 4px 9px; }
   }
+  /* compact view */
+  #mini { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; grid-auto-flow: column; column-gap: 12px; row-gap: 2px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px 4px; cursor: pointer; }
+  .mcell { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 4px; } .mcell { flex-wrap: wrap; row-gap: 0; padding: 3px 4px; } .mcell .mlab { width: 100%; font-size: 11px; } .mcell .batt { flex: 1; height: 24px; margin: 2px 7px 2px 0; } .mcell .bt { display: none; } .mpct { font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: right; } .mpct.na { font-size: 11px; color: var(--muted); }
+  .mlab { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mlab b { color: var(--text); }
+  #toggle { font-size: 11px; }
+  #cards { display: none; }
+  body.expanded #cards { display: grid; margin-top: 6px; }
+  body.expanded #mini { display: none; }
+  header { margin-bottom: 4px !important; flex-wrap: nowrap !important; } header .meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; } #stale { overflow: hidden; text-overflow: ellipsis; min-width: 0; } h1 { font-size: 13px !important; white-space: nowrap; }
+  @media (min-width: 700px) and (min-height: 500px) {
+    #mini, #toggle { display: none !important; } #cards { display: grid !important; }
+    h1 { font-size: 17px !important; }
+  }
 </style>
 </head>
 <body>
@@ -107,8 +121,10 @@
     <span class="meta" id="fetched" title="自動取得: PCで Claude Code / Codex を使ったときに更新（最短10分間隔）">読み込み中…</span>
     <span class="stale" id="stale" hidden></span>
     <span class="spacer"></span>
-    <button id="reload" type="button" aria-label="再読み込み">↻ 更新</button>
+    <button id="toggle" type="button" aria-expanded="false">詳細 ▼</button>
+    <button id="reload" type="button" aria-label="再読み込み">↻</button>
   </header>
+  <div id="mini" title="タップで詳細"></div>
   <div id="cards"></div>
 </main>
 
@@ -204,14 +220,14 @@ function windowRow(label, autoW, manW, manSavedAt, autoAsOf) {
   const d = toDate(r.v);
   row.innerHTML =
     '<div class="row-head"><span class="label"></span><span class="val"></span></div>' +
-    '<div class="donut"><div class="dv"></div></div>' +
+    '<div class="batt"><div class="fill"></div><div class="bt"></div></div>' +
     '<div class="reset">↻ <span class="rt"></span> <span class="countdown" data-t=""></span></div>';
   row.querySelector(".label").textContent = label;
-  const dn = row.querySelector(".donut"), dv = row.querySelector(".dv");
-  dn.style.setProperty("--p", rem === null ? 0 : rem);
+  const dn = row.querySelector(".batt"), dv = row.querySelector(".bt");
   dn.style.setProperty("--c", color);
-  if (rem === null) { dn.classList.add("na-ring"); dv.innerHTML = "<b>取得なし</b>"; }
-  else { dv.innerHTML = "<b>" + (Math.round(rem * 10) / 10) + "%</b><small>残り</small>"; }
+  dn.querySelector(".fill").style.width = (rem === null ? 0 : rem) + "%";
+  if (rem === null) { dn.classList.add("na-ring"); dv.textContent = "取得なし"; }
+  else { dv.textContent = "残り " + (Math.round(rem * 10) / 10) + "%"; }
   if (p.manual) row.querySelector(".val").insertAdjacentHTML("beforeend", '<span class="badge">手入力</span>');
   row.querySelector(".rt").textContent = fmt(d);
   if (r.manual && d) row.querySelector(".rt").insertAdjacentHTML("afterend", '<span class="badge">手入力</span>');
@@ -224,6 +240,7 @@ function render() {
   const wrap = document.getElementById("cards");
   wrap.textContent = "";
   const tpl = document.getElementById("card-tpl");
+  const mini = document.getElementById("mini"); mini.textContent = "";
   SERVICES.forEach(s => {
     const node = tpl.content.firstElementChild.cloneNode(true);
     const auto = (DATA && DATA.services && DATA.services[s.key]) || {};
@@ -233,8 +250,18 @@ function render() {
     node.querySelector(".name").textContent = s.name;
     node.querySelector(".plan").textContent = s.plan;
     const rows = node.querySelector(".rows");
-    rows.appendChild(windowRow("5時間枠", auto.five_hour, man && man.five_hour, manSavedAt, autoAsOf));
-    rows.appendChild(windowRow("週間枠", auto.weekly, man && man.weekly, manSavedAt, autoAsOf));
+    [["5h", "5時間枠", "five_hour"], ["週", "週間枠", "weekly"]].forEach(([sl, ll, k]) => {
+      const r1 = windowRow(ll, auto[k], man && man[k], manSavedAt, autoAsOf);
+      rows.appendChild(r1);
+      const mc = document.createElement("div"); mc.className = "mcell";
+      const lb = document.createElement("div"); lb.className = "mlab";
+      lb.innerHTML = "<b></b> "; lb.firstChild.textContent = s.name.split(" ")[0]; lb.appendChild(document.createTextNode(ll));
+      mc.appendChild(lb);
+      const b = r1.querySelector(".batt").cloneNode(true);
+      const mp = document.createElement("span"); const t = b.querySelector(".bt").textContent;
+      mp.className = "mpct" + (t.startsWith("残り") ? "" : " na"); mp.textContent = t.replace("残り ", "");
+      mc.appendChild(b); mc.appendChild(mp); mini.appendChild(mc);
+    });
 
     // リセット回数
     const rc = pick(num(auto.reset_count), num(man && man.reset_count), manSavedAt, autoAsOf);
@@ -321,11 +348,18 @@ function updateMeta() {
     badge.title = "data/usage.json を読み込めませんでした。";
     return;
   }
-  el.textContent = "最終取得 " + fmt(f) + "（" + ago(f) + "）";
+  el.textContent = fmt(f) + "（" + ago(f) + "）"; el.title = "最終取得 " + fmt(f);
   badge.hidden = (Date.now() - f) / 60000 <= STALE_MIN;
-  badge.textContent = "⚠ 古い可能性";
+  badge.textContent = "⚠ 古い";
   badge.title = ago(f) + "に取得。更新は PC で Claude Code / Codex を使ったときだけ行われます（スマホでの利用分は未反映の可能性）。";
 }
+
+function setExpanded(on) {
+  document.body.classList.toggle("expanded", on);
+  const t = document.getElementById("toggle"); t.textContent = on ? "詳細 ▲" : "詳細 ▼"; t.setAttribute("aria-expanded", on);
+}
+document.getElementById("toggle").addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
+document.getElementById("mini").addEventListener("click", () => setExpanded(true));
 
 function tick() {
   document.querySelectorAll(".countdown[data-t]").forEach(el => {
