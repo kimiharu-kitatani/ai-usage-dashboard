@@ -1,5 +1,6 @@
 # AI利用枠 デスクトップウィジェット（枠なし・1行）。data/usage.json をローカルで読むだけ。
-import json, os, datetime as dt, tkinter as tk
+import json, os, ctypes, datetime as dt, tkinter as tk
+from ctypes import wintypes
 from tkinter import font as tkfont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -11,6 +12,24 @@ BG, FG, MUTED, LINE, TRACK = "#1b1e25", "#e8eaf0", "#9aa1ae", "#3a3f4b", "#4b506
 SERVICES = [("claude", "Claude"), ("codex", "Codex")]
 WINS = [("five_hour", "5h"), ("weekly", "1w")]
 PAD = 4
+MARGIN = 4
+
+class MONITORINFO(ctypes.Structure):
+    _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT), ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
+
+def work_area(hwnd):
+    """ウィジェットがあるモニターの作業領域（タスクバーを除く）"""
+    try:
+        u = ctypes.windll.user32
+        mon = u.MonitorFromWindow(wintypes.HWND(hwnd), 2)  # MONITOR_DEFAULTTONEAREST
+        mi = MONITORINFO(); mi.cbSize = ctypes.sizeof(MONITORINFO)
+        if u.GetMonitorInfoW(mon, ctypes.byref(mi)):
+            r, m = mi.rcWork, mi.rcMonitor
+            return r.left, r.top, r.right, r.bottom, m.right - m.left
+        r = wintypes.RECT(); u.SystemParametersInfoW(0x30, 0, ctypes.byref(r), 0)  # SPI_GETWORKAREA
+        return r.left, r.top, r.right, r.bottom, u.GetSystemMetrics(0)
+    except Exception:
+        return None
 
 def color(rem):
     return TRACK if rem is None else "#3b82f6" if rem >= 50 else "#eab308" if rem >= 20 else "#ef4444"
@@ -51,18 +70,46 @@ class W:
         self.m.add_command(label="更新", command=self.reload)
         self.m.add_separator(); self.m.add_command(label="閉じる", command=self.r.destroy)
         self.c.bind("<Button-3>", lambda e: self.m.tk_popup(e.x_root, e.y_root))
+        for k, d in (("<Left>", (-1, 0)), ("<Right>", (1, 0)), ("<Up>", (0, -1)), ("<Down>", (0, 1))):
+            self.r.bind(k, lambda e, d=d: self.snap(*d))
         try:
             p = json.load(open(POS, encoding="utf-8")); self.r.geometry(f"+{p['x']}+{p['y']}")
         except Exception:
             self.r.geometry("+40+40")
         self.reload(); self.loop()
+        self.r.after(300, self.r.focus_force)
 
-    def start(self, e): self.dx, self.dy = e.x_root - self.r.winfo_x(), e.y_root - self.r.winfo_y()
+    def hwnd(self):
+        try: return ctypes.windll.user32.GetAncestor(self.r.winfo_id(), 2) or self.r.winfo_id()
+        except Exception: return self.r.winfo_id()
+
+    def snap(self, dx, dy):
+        wa = work_area(self.hwnd())
+        if not wa: return
+        L, T, R, B, mw = wa
+        # Tk と Win32 で DPI スケールが違う場合に合わせる
+        k = self.r.winfo_screenwidth() / mw if mw else 1.0
+        if abs(k - 1) > 0.02: L, T, R, B = (round(v * k) for v in (L, T, R, B))
+        self.r.update_idletasks()
+        w, h = self.r.winfo_width(), self.r.winfo_height()
+        x, y = self.r.winfo_x(), self.r.winfo_y()
+        def nxt(cur, lo, hi, size, d):
+            stops = [lo + MARGIN, lo + (hi - lo - size) // 2, hi - size - MARGIN]
+            c = [s for s in stops if (s < cur - 1 if d < 0 else s > cur + 1)]
+            return (max(c) if d < 0 else min(c)) if c else cur
+        if dx: x = nxt(x, L, R, w, dx)
+        if dy: y = nxt(y, T, B, h, dy)
+        self.r.geometry(f"+{x}+{y}"); self.save_pos(xy=(x, y))
+
+    def start(self, e):
+        self.r.focus_force()
+        self.dx, self.dy = e.x_root - self.r.winfo_x(), e.y_root - self.r.winfo_y()
     def move(self, e): self.r.geometry(f"+{e.x_root - self.dx}+{e.y_root - self.dy}")
-    def save_pos(self, e=None):
+    def save_pos(self, e=None, xy=None):
         try:
             os.makedirs(STATE, exist_ok=True)
-            json.dump({"x": self.r.winfo_x(), "y": self.r.winfo_y()}, open(POS, "w", encoding="utf-8"))
+            x, y = xy or (self.r.winfo_x(), self.r.winfo_y())
+            json.dump({"x": x, "y": y, "w": self.r.winfo_width(), "h": self.r.winfo_height()}, open(POS, "w", encoding="utf-8"))
         except Exception: pass
     def toggle(self): self.detail = not self.detail; self.draw()
     def loop(self): self.reload(); self.r.after(5 * 60 * 1000, self.loop)
@@ -110,6 +157,12 @@ class W:
                     c.create_rectangle(x + 2, y - bh / 2 + 2, x + 2 + (bw - 3) * rem / 100, y + bh / 2 - 1, fill=color(rem), width=0)
                 x += bw + 6
                 x = (self.text(x, y, "取得なし", self.fs, MUTED) if rem is None else self.text(x, y, f"{round(rem)}%")) + 6
+        x += 2; c.create_line(x, PAD + 2, x, PAD + H - 2, fill=LINE); x += 4
+        for tag, label, fn in (("b_det", "▲" if self.detail else "▼", self.toggle), ("b_rel", "↻", self.reload)):
+            c.create_rectangle(x, PAD + 2, x + 16, PAD + H - 2, outline=LINE, fill=BG, tags=tag)
+            c.create_text(x + 8, y, text=label, font=self.fs, fill=FG, tags=tag)
+            c.tag_bind(tag, "<ButtonRelease-1>", lambda e, fn=fn: self.r.after(1, fn))
+            x += 19
         width = x - 2 + PAD
         height = PAD * 2 + H
         if self.detail:
