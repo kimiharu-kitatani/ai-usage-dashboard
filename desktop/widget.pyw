@@ -111,7 +111,10 @@ class W:
             x, y = xy or (self.r.winfo_x(), self.r.winfo_y())
             json.dump({"x": x, "y": y, "w": self.r.winfo_width(), "h": self.r.winfo_height()}, open(POS, "w", encoding="utf-8"))
         except Exception: pass
-    def toggle(self): self.detail = not self.detail; self.draw()
+    def toggle(self):
+        wa = work_area(self.hwnd())
+        self.anchor_bottom = bool(wa) and abs(self.r.winfo_y() + self.r.winfo_height() - (wa[3] - MARGIN)) <= 2
+        self.detail = not self.detail; self.draw()
     def loop(self): self.reload(); self.r.after(5 * 60 * 1000, self.loop)
     def reload(self):
         try: self.data = json.load(open(DATA, encoding="utf-8"))
@@ -186,6 +189,18 @@ class W:
                 xe = self.text(PAD + 2, yy + 8, "data/usage.json を読めません", self.fs, "#ef4444"); width = max(width, xe + PAD); yy += 16
             height = yy + PAD
         c.config(width=width, height=height)
+        self.r.after(10, self.clamp)
+
+    def clamp(self):
+        """画面下端・右端からはみ出したら作業領域内に戻す（下端に付けていれば上に伸びる）"""
+        wa = work_area(self.hwnd())
+        if not wa: return
+        L, T, R, B, _ = wa
+        self.r.update_idletasks()
+        w, h, x, y = self.r.winfo_width(), self.r.winfo_height(), self.r.winfo_x(), self.r.winfo_y()
+        nx = max(L + MARGIN, min(x, R - w - MARGIN)); ny = max(T + MARGIN, min(y, B - h - MARGIN))
+        if getattr(self, "anchor_bottom", False): ny = B - h - MARGIN; self.anchor_bottom = False
+        if (nx, ny) != (x, y): self.r.geometry(f"+{nx}+{ny}")
 
 if __name__ == "__main__":
     W().r.mainloop()
