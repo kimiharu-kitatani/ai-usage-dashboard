@@ -1,5 +1,5 @@
 # AI利用枠 デスクトップウィジェット（枠なし・1行）。data/usage.json をローカルで読むだけ。
-import json, os, ctypes, datetime as dt, tkinter as tk
+import json, os, ctypes, subprocess, threading, time, datetime as dt, tkinter as tk
 from ctypes import wintypes
 from tkinter import font as tkfont
 
@@ -63,19 +63,24 @@ class W:
         self.c.pack()
         import sys
         self.detail = "--detail" in sys.argv; self.data = None
+        self.busy = False; self.status = None; self.err = None; self.spin = 0; self.tip = None
         self.c.bind("<ButtonPress-1>", self.start); self.c.bind("<B1-Motion>", self.move)
         self.c.bind("<ButtonRelease-1>", self.save_pos); self.c.bind("<Double-Button-1>", lambda e: self.toggle())
         self.m = tk.Menu(self.r, tearoff=0)
         self.m.add_command(label="詳細", command=self.toggle)
         self.m.add_command(label="更新", command=self.reload)
-        self.m.add_separator(); self.m.add_command(label="閉じる", command=self.r.destroy)
+        self.m.add_separator(); self.m.add_command(label="閉じる", command=self.close)
+        self.r.protocol("WM_DELETE_WINDOW", self.close)
         self.c.bind("<Button-3>", lambda e: self.m.tk_popup(e.x_root, e.y_root))
         for k, d in (("<Left>", (-1, 0)), ("<Right>", (1, 0)), ("<Up>", (0, -1)), ("<Down>", (0, 1))):
             self.r.bind(k, lambda e, d=d: self.snap(*d))
+        self.first = False
         try:
-            p = json.load(open(POS, encoding="utf-8")); self.r.geometry(f"+{p['x']}+{p['y']}")
+            p = json.load(open(POS, encoding="utf-8")); self.r.geometry(f"+{int(p['x'])}+{int(p['y'])}")
         except Exception:
-            self.r.geometry("+40+40")
+            self.first = True; self.r.geometry("+0+0")
+            try: self.r.attributes("-alpha", 0.0)
+            except Exception: pass
         self.reload(); self.loop()
         self.r.after(300, self.r.focus_force)
 
@@ -161,10 +166,12 @@ class W:
                 x += bw + 6
                 x = (self.text(x, y, "取得なし", self.fs, MUTED) if rem is None else self.text(x, y, f"{round(rem)}%")) + 6
         x += 2; c.create_line(x, PAD + 2, x, PAD + H - 2, fill=LINE); x += 4
-        for tag, label, fn in (("b_det", "▲" if self.detail else "▼", self.toggle), ("b_rel", "↻", self.reload)):
+        for tag, label, fn in (("b_det", "▲" if self.detail else "▼", self.toggle), ("b_rel", self.rel_label(), self.refresh)):
             c.create_rectangle(x, PAD + 2, x + 16, PAD + H - 2, outline=LINE, fill=BG, tags=tag)
             c.create_text(x + 8, y, text=label, font=self.fs, fill=FG, tags=tag)
             c.tag_bind(tag, "<ButtonRelease-1>", lambda e, fn=fn: self.r.after(1, fn))
+            if tag == "b_rel":
+                c.tag_bind(tag, "<Enter>", lambda e: self.show_tip(e)); c.tag_bind(tag, "<Leave>", lambda e: self.hide_tip())
             x += 19
         width = x - 2 + PAD
         height = PAD * 2 + H
@@ -185,11 +192,78 @@ class W:
                 self.icon(key, PAD + 2, yy + 2)
                 xe = self.text(PAD + 20, yy + 9, " · ".join(parts), self.fs, "#eab308" if old else FG)
                 width = max(width, xe + PAD + 2); yy += 17
+            msg = "最終更新 " + fmt(fa) + (f"（{ago(fa)}）" if fa else "")
+            if self.busy: msg += " · 更新中…"
+            if self.err: msg += " · 更新失敗: " + self.err[:80]
+            self.text(PAD + 2, yy + 8, msg, self.fs, "#ef4444" if self.err else MUTED)
+            width = max(width, PAD + 2 + self.fs.measure(msg) + PAD + 2); yy += 16
             if not fa:
                 xe = self.text(PAD + 2, yy + 8, "data/usage.json を読めません", self.fs, "#ef4444"); width = max(width, xe + PAD); yy += 16
             height = yy + PAD
         c.config(width=width, height=height)
         self.r.after(10, self.clamp)
+
+    def rel_label(self):
+        if self.busy: return "◐◓◑◒"[self.spin % 4]
+        return {"ok": "✓", "ng": "✗"}.get(self.status, "↻")
+
+    def show_tip(self, e):
+        self.hide_tip()
+        t = "更新中…" if self.busy else ("更新失敗: " + self.err) if self.err else "今すぐ取得（Claude・Codex）"
+        self.tip = tk.Toplevel(self.r); self.tip.overrideredirect(True); self.tip.attributes("-topmost", True)
+        tk.Label(self.tip, text=t, bg="#000000", fg="#ffffff", font=self.fs, padx=4, pady=1, wraplength=360, justify="left").pack()
+        self.tip.geometry(f"+{e.x_root + 8}+{e.y_root + 14}")
+
+    def hide_tip(self):
+        if self.tip: self.tip.destroy(); self.tip = None
+
+    def refresh(self):
+        """↻: 裏で Claude ping + Codex 取得 + push を実行し、終わったら表示を読み直す"""
+        if self.busy: return
+        self.busy = True; self.status = None; self.err = None; self.draw(); self.animate()
+        threading.Thread(target=self._work, daemon=True).start()
+
+    def animate(self):
+        if not self.busy: return
+        self.spin += 1; self.draw(); self.r.after(250, self.animate)
+
+    def _work(self):
+        err = None
+        try:
+            before = (json.load(open(DATA, encoding="utf-8")) or {}).get("fetched_at")
+        except Exception:
+            before = None
+        try:
+            ps = os.path.join(os.path.dirname(HERE), "collector", "claude_ping.ps1")
+            r = subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", ps],
+                               capture_output=True, timeout=240, creationflags=0x08000000, stdin=subprocess.DEVNULL)
+            after = (json.load(open(DATA, encoding="utf-8")) or {}).get("fetched_at")
+            if after == before:
+                err = "データが更新されませんでした（別の取得が実行中の可能性）"
+            else:
+                logp = os.path.join(STATE, "collector.log")
+                try:
+                    tail = open(logp, encoding="utf-8", errors="replace").read()[-3000:]
+                    last = [l for l in tail.splitlines() if "ping:" in l or "push error" in l]
+                    if last and "updated=False" in last[-1]: err = "Claude の値を取れませんでした（Codex は更新）"
+                    elif any("push error" in l for l in last[-2:]): err = "公開ページへの反映に失敗"
+                except Exception: pass
+        except subprocess.TimeoutExpired:
+            err = "タイムアウト"
+        except Exception as e:
+            err = str(e)
+        self.r.after(0, self._done, err)
+
+    def _done(self, err):
+        self.busy = False; self.err = err; self.status = "ng" if err else "ok"
+        self.reload()
+        self.r.after(3000 if not err else 8000, self._clear_status)
+
+    def _clear_status(self):
+        if not self.busy: self.status = None; self.draw()
+
+    def close(self):
+        self.save_pos(); self.r.destroy()
 
     def clamp(self):
         """画面下端・右端からはみ出したら作業領域内に戻す（下端に付けていれば上に伸びる）"""
@@ -198,9 +272,30 @@ class W:
         L, T, R, B, _ = wa
         self.r.update_idletasks()
         w, h, x, y = self.r.winfo_width(), self.r.winfo_height(), self.r.winfo_x(), self.r.winfo_y()
+        if self.first:  # 保存位置なし: メインモニターの作業領域の右上
+            self.first = False
+            try:
+                r = wintypes.RECT(); ctypes.windll.user32.SystemParametersInfoW(0x30, 0, ctypes.byref(r), 0)
+                k = self.r.winfo_screenwidth() / (ctypes.windll.user32.GetSystemMetrics(0) or 1)
+                L, T, R, B = (round(v * k) for v in (r.left, r.top, r.right, r.bottom))
+            except Exception: pass
+            x, y = R - w - MARGIN, T + MARGIN
+            self.r.geometry(f"+{x}+{y}"); self.r.attributes("-alpha", 1.0); self.save_pos(xy=(x, y)); return
+        # 保存位置が見える範囲外（モニター構成が変わった等）なら、いちばん近いモニターの作業領域に収める
         nx = max(L + MARGIN, min(x, R - w - MARGIN)); ny = max(T + MARGIN, min(y, B - h - MARGIN))
         if getattr(self, "anchor_bottom", False): ny = B - h - MARGIN; self.anchor_bottom = False
-        if (nx, ny) != (x, y): self.r.geometry(f"+{nx}+{ny}")
+        if (nx, ny) != (x, y): self.r.geometry(f"+{nx}+{ny}"); self.save_pos(xy=(nx, ny))
+
+def single_instance():
+    try:
+        k = ctypes.windll.kernel32
+        k.CreateMutexW.restype = wintypes.HANDLE
+        h = k.CreateMutexW(None, False, "Local\\AIUsageDashboardWidget")
+        return h if k.GetLastError() != 183 else None  # ERROR_ALREADY_EXISTS
+    except Exception:
+        return True
 
 if __name__ == "__main__":
-    W().r.mainloop()
+    _mutex = single_instance()
+    if _mutex:
+        W().r.mainloop()
