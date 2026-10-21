@@ -8,6 +8,9 @@ DATA = os.path.join(os.path.dirname(HERE), "data", "usage.json")
 STATE = os.path.join(os.environ.get("LOCALAPPDATA", HERE), "ai-usage-dashboard")
 POS = os.path.join(STATE, "widget.json")
 JST = dt.timezone(dt.timedelta(hours=9))
+DM = "#c9ced8"
+KEY = "#010203"  # 透明にする色（他では使わない）
+HALO = "#000000"
 BG, FG, MUTED, LINE, TRACK = "#1b1e25", "#e8eaf0", "#9aa1ae", "#3a3f4b", "#4b5060"
 SERVICES = [("claude", "Claude"), ("codex", "Codex")]
 WINS = [("five_hour", "5h"), ("weekly", "1w")]
@@ -56,10 +59,14 @@ def ago(d):
 class W:
     def __init__(self):
         self.r = tk.Tk(); self.r.overrideredirect(True); self.r.attributes("-topmost", True)
-        self.r.configure(bg=BG)
+        self.r.configure(bg=KEY)
+        try: self.r.wm_attributes("-transparentcolor", KEY)  # 1行表示の背景を透明に
+        except Exception: pass
         self.f = tkfont.Font(family="Yu Gothic UI", size=9, weight="bold")
         self.fs = tkfont.Font(family="Yu Gothic UI", size=8)
-        self.c = tk.Canvas(self.r, bg=BG, highlightthickness=1, highlightbackground=LINE, bd=0)
+        self.fd = tkfont.Font(family="Yu Gothic UI", size=11)
+        self.fdb = tkfont.Font(family="Yu Gothic UI", size=11, weight="bold")
+        self.c = tk.Canvas(self.r, bg=KEY, highlightthickness=0, bd=0)
         self.c.pack()
         import sys
         self.detail = "--detail" in sys.argv; self.data = None
@@ -153,16 +160,19 @@ class W:
 
     def text(self, x, y, s, fnt=None, fill=FG):
         fnt = fnt or self.f
+        if getattr(self, "_halo", False):  # 透明背景でも読めるよう黒い縁取り
+            for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
+                self.c.create_text(x + ox, y + oy, text=s, anchor="w", font=fnt, fill=HALO)
         self.c.create_text(x, y, text=s, anchor="w", font=fnt, fill=fill)
         return x + fnt.measure(s)
 
     def draw(self):
-        c = self.c; c.delete("all")
+        c = self.c; c.delete("all"); self._halo = True
         svcs = (self.data or {}).get("services", {})
         H = 20; y = PAD + H // 2; x = PAD + 2
         for i, (key, name) in enumerate(SERVICES):
             if i:
-                x += 5; c.create_line(x, PAD + 2, x, PAD + H - 2, fill=LINE); x += 6
+                x += 5; c.create_line(x, PAD + 2, x, PAD + H - 2, fill="#9aa1ae", width=2); x += 6
             x = self.icon(key, x, y - 7) + 4
             s = svcs.get(key) or {}
             for wk, wl in WINS:
@@ -171,15 +181,17 @@ class W:
                 rem = None if u is None else max(0.0, min(100.0, 100 - float(u)))
                 x = self.text(x, y, wl, self.fs, MUTED) + 3
                 bw, bh = 24, 10
-                c.create_rectangle(x, y - bh / 2, x + bw, y + bh / 2, outline=MUTED, dash=(2, 2) if rem is None else None)
-                c.create_rectangle(x + bw + 1, y - 2, x + bw + 3, y + 2, fill=MUTED, outline=MUTED)
+                c.create_rectangle(x - 1, y - bh / 2 - 1, x + bw + 1, y + bh / 2 + 1, outline=HALO, fill=HALO if rem is None else "#202430")
+                c.create_rectangle(x + bw + 1, y - 3, x + bw + 4, y + 3, fill=HALO, outline=HALO)
+                c.create_rectangle(x, y - bh / 2, x + bw, y + bh / 2, outline="#d0d4dc", dash=(2, 2) if rem is None else None)
+                c.create_rectangle(x + bw + 1, y - 2, x + bw + 3, y + 2, fill="#d0d4dc", outline="#d0d4dc")
                 if rem:
                     c.create_rectangle(x + 2, y - bh / 2 + 2, x + 2 + (bw - 3) * rem / 100, y + bh / 2 - 1, fill=color(rem), width=0)
                 x += bw + 6
                 x = (self.text(x, y, "取得なし", self.fs, MUTED) if rem is None else self.text(x, y, f"{round(rem)}%")) + 6
-        x += 2; c.create_line(x, PAD + 2, x, PAD + H - 2, fill=LINE); x += 4
+        x += 6
         for tag, label, fn in (("b_det", "▲" if self.detail else "▼", self.toggle), ("b_rel", self.rel_label(), self.refresh)):
-            c.create_rectangle(x, PAD + 2, x + 16, PAD + H - 2, outline=LINE, fill=BG, tags=tag)
+            c.create_rectangle(x, PAD + 2, x + 16, PAD + H - 2, outline="#9aa1ae", fill=BG, tags=tag)
             c.create_text(x + 8, y, text=label, font=self.fs, fill=FG, tags=tag)
             c.tag_bind(tag, "<ButtonRelease-1>", lambda e, fn=fn: self.r.after(1, fn))
             if tag == "b_rel":
@@ -187,31 +199,43 @@ class W:
             x += 19
         width = x - 2 + PAD
         height = PAD * 2 + H
+        self._halo = False
         if self.detail:
-            yy = PAD + H + 2
+            fd, fdb = self.fd, self.fdb
+            self._panel = c.create_rectangle(0, PAD + H + 1, 2000, 2000, fill=BG, outline=LINE)
+            LH = fd.metrics("linespace") + 4
+            x0 = PAD + 10; c1 = x0 + 8 + fdb.measure("1w") + 12
+            c2 = c1 + fdb.measure("残り100%") + 16
+            yy = PAD + H + 6
+            c.create_line(PAD + 2, yy - 3, width - PAD - 2, yy - 3, fill=LINE)
             fa = todt((self.data or {}).get("fetched_at"))
-            for key, name in SERVICES:
+            for si, (key, name) in enumerate(SERVICES):
                 s = svcs.get(key) or {}
-                parts = []
+                if si: yy += 4; c.create_line(x0, yy - 2, max(width, 300) - PAD - 6, yy - 2, fill=LINE); yy += 4
+                self.icon(key, x0, yy + LH // 2 - 7)
+                width = max(width, self.text(x0 + 20, yy + LH // 2, name, fdb) + PAD + 10); yy += LH
                 for wk, wl in WINS:
-                    w = s.get(wk) or {}; d = todt(w.get("resets_at"))
-                    parts.append(f"{wl} ↻{fmt(d)} {left(d)}" if d else f"{wl} リセット時刻 取得なし")
-                a = todt(s.get("as_of"))
+                    w = s.get(wk) or {}; u = w.get("used_percent"); d = todt(w.get("resets_at"))
+                    rem = None if u is None else max(0.0, min(100.0, 100 - float(u)))
+                    cy = yy + LH // 2
+                    self.text(x0 + 8, cy, wl, fdb, DM)
+                    self.text(c1, cy, "取得なし" if rem is None else f"残り{round(rem)}%", fdb, DM if rem is None else color(rem))
+                    rt = (f"リセット {fmt(d)}（{left(d)}）" if d else "リセット 取得なし")
+                    width = max(width, self.text(c2, cy, rt, fd) + PAD + 10); yy += LH
+                a = todt(s.get("as_of")); rc = s.get("reset_count")
                 old = a and (dt.datetime.now(JST) - a).total_seconds() > 6 * 3600
-                rc = s.get("reset_count")
-                parts.append(("古い値 " if old else "") + f"値 {fmt(a)}（{ago(a)}）")
-                parts.append("リセット回数 " + ("取得なし" if rc is None else f"{rc}回"))
-                self.icon(key, PAD + 2, yy + 2)
-                xe = self.text(PAD + 20, yy + 9, " · ".join(parts), self.fs, "#eab308" if old else FG)
-                width = max(width, xe + PAD + 2); yy += 17
+                line = f"取得 {fmt(a)}（{ago(a)}）" if a else "取得 不明"
+                if old: line += "  古い値"
+                rcs = "リセット回数 " + ("取得なし" if rc is None else f"{rc}回")
+                self.text(x0 + 8, yy + LH // 2, rcs, fd, DM); yy += LH
+                width = max(width, self.text(x0 + 8, yy + LH // 2, line, fd, "#eab308" if old else DM) + PAD + 10); yy += LH
             msg = "最終更新 " + fmt(fa) + (f"（{ago(fa)}）" if fa else "")
-            if self.busy: msg += " · 更新中…"
-            if self.err: msg += " · 更新失敗: " + self.err[:80]
-            self.text(PAD + 2, yy + 8, msg, self.fs, "#ef4444" if self.err else MUTED)
-            width = max(width, PAD + 2 + self.fs.measure(msg) + PAD + 2); yy += 16
-            if not fa:
-                xe = self.text(PAD + 2, yy + 8, "data/usage.json を読めません", self.fs, "#ef4444"); width = max(width, xe + PAD); yy += 16
-            height = yy + PAD
+            if self.busy: msg += "  更新中…"
+            if self.err: msg += "  更新失敗: " + self.err[:60]
+            yy += 4; c.create_line(x0, yy - 2, width - PAD - 6, yy - 2, fill=LINE); yy += 2
+            width = max(width, self.text(x0, yy + LH // 2, msg, fd, "#f87171" if self.err else DM) + PAD + 10); yy += LH
+            height = yy + PAD + 2
+            c.coords(self._panel, 0, PAD + H + 1, width - 1, height - 1)
         c.config(width=width, height=height)
         self.r.after(10, self.clamp)
 
