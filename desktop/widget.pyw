@@ -104,22 +104,34 @@ class W:
             return (max(c) if d < 0 else min(c)) if c else cur
         if dx: x = nxt(x, L, R, w, dx)
         if dy: y = nxt(y, T, B, h, dy)
+        self.home = None
         self.r.geometry(f"+{x}+{y}"); self.save_pos(xy=(x, y))
 
     def start(self, e):
         self.r.focus_force()
         self.dx, self.dy = e.x_root - self.r.winfo_x(), e.y_root - self.r.winfo_y()
-    def move(self, e): self.r.geometry(f"+{e.x_root - self.dx}+{e.y_root - self.dy}")
+    def move(self, e):
+        self.home = None
+        self.r.geometry(f"+{e.x_root - self.dx}+{e.y_root - self.dy}")
     def save_pos(self, e=None, xy=None):
         try:
             os.makedirs(STATE, exist_ok=True)
-            x, y = xy or (self.r.winfo_x(), self.r.winfo_y())
+            home = getattr(self, "home", None)
+            x, y = xy or (home[:2] if home else (self.r.winfo_x(), self.r.winfo_y()))
             json.dump({"x": x, "y": y, "w": self.r.winfo_width(), "h": self.r.winfo_height()}, open(POS, "w", encoding="utf-8"))
         except Exception: pass
     def toggle(self):
-        wa = work_area(self.hwnd())
-        self.anchor_bottom = bool(wa) and abs(self.r.winfo_y() + self.r.winfo_height() - (wa[3] - MARGIN)) <= 2
+        self.r.update_idletasks()
+        x, y, w, h = self.r.winfo_x(), self.r.winfo_y(), self.r.winfo_width(), self.r.winfo_height()
+        if not self.detail:
+            wa = work_area(self.hwnd())
+            ar = ab = False
+            if wa:
+                ar = x + w >= wa[2] - MARGIN - 2 or x + w / 2 > (wa[0] + wa[2]) / 2
+                ab = y + h >= wa[3] - MARGIN - 2 or y + h / 2 > (wa[1] + wa[3]) / 2
+            self.home = (x, y, w, h, ar, ab)   # 開く前の位置（ユーザーの位置）
         self.detail = not self.detail; self.draw()
+
     def loop(self): self.reload(); self.r.after(5 * 60 * 1000, self.loop)
     def reload(self):
         try: self.data = json.load(open(DATA, encoding="utf-8"))
@@ -283,7 +295,17 @@ class W:
             self.r.geometry(f"+{x}+{y}"); self.r.attributes("-alpha", 1.0); self.save_pos(xy=(x, y)); return
         # 保存位置が見える範囲外（モニター構成が変わった等）なら、いちばん近いモニターの作業領域に収める
         nx = max(L + MARGIN, min(x, R - w - MARGIN)); ny = max(T + MARGIN, min(y, B - h - MARGIN))
-        if getattr(self, "anchor_bottom", False): ny = B - h - MARGIN; self.anchor_bottom = False
+        home = getattr(self, "home", None)
+        if home:
+            hx, hy, hw, hh, ar, ab = home
+            if self.detail:
+                # 右寄せなら左へ、下寄せなら上へ伸ばす。ずらした位置は保存しない
+                nx = hx + hw - w if ar else hx; ny = hy + hh - h if ab else hy
+                nx = max(L + MARGIN, min(nx, R - w - MARGIN)); ny = max(T + MARGIN, min(ny, B - h - MARGIN))
+            else:
+                nx, ny = hx, hy; self.home = None
+            if (nx, ny) != (x, y): self.r.geometry(f"+{nx}+{ny}")
+            return
         if (nx, ny) != (x, y): self.r.geometry(f"+{nx}+{ny}"); self.save_pos(xy=(nx, ny))
 
 def single_instance():
