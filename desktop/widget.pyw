@@ -10,6 +10,11 @@ POS = os.path.join(STATE, "widget.json")
 JST = dt.timezone(dt.timedelta(hours=9))
 DM = "#c9ced8"
 BG_ALPHA = 0.25  # 1行表示の背景の濃さ（0=透明〜1=不透明）
+BG_ALPHA_DARK = 0.25   # 後ろが暗いときの濃さ
+BG_ALPHA_LIGHT = 0.6   # 後ろが明るいときの濃さ
+LUM_TO_LIGHT = 0.6     # 明るさがこれを超えたら LIGHT に
+LUM_TO_DARK = 0.45     # これを下回ったら DARK に（ちらつき防止の幅）
+SAMPLE_MS = 3000       # 背景の明るさを調べる間隔
 KEY = "#010203"  # 透明にする色（他では使わない）
 HALO = "#000000"
 BG, FG, MUTED, LINE, TRACK = "#1b1e25", "#e8eaf0", "#9aa1ae", "#3a3f4b", "#4b5060"
@@ -69,7 +74,8 @@ class W:
         self.fdb = tkfont.Font(family="Yu Gothic UI", size=11, weight="bold")
         # 半透明の背景用ウィンドウ（本体の真後ろに置き、一緒に動かす）
         self.bgw = tk.Toplevel(self.r); self.bgw.overrideredirect(True); self.bgw.configure(bg=BG)
-        try: self.bgw.attributes("-alpha", BG_ALPHA); self.bgw.attributes("-topmost", True)
+        self.bg_alpha = BG_ALPHA_DARK
+        try: self.bgw.attributes("-alpha", BG_ALPHA_DARK); self.bgw.attributes("-topmost", True)
         except Exception: pass
         self.row_w, self.row_h = 10, 10
         self.c = tk.Canvas(self.r, bg=KEY, highlightthickness=0, bd=0)
@@ -98,7 +104,7 @@ class W:
             try: self.r.attributes("-alpha", 0.0)
             except Exception: pass
         self.reload(); self.loop()
-        self.r.after(300, self.r.focus_force); self.r.after(500, self.keep_bg)
+        self.r.after(300, self.r.focus_force); self.r.after(500, self.keep_bg); self.r.after(800, self.adapt_bg)
 
     def hwnd(self):
         try: return ctypes.windll.user32.GetAncestor(self.r.winfo_id(), 2) or self.r.winfo_id()
@@ -129,6 +135,69 @@ class W:
             self.r.lift(); self.bgw.lower(self.r)
         except Exception: pass
 
+    def sample_lum(self):
+        """ウィジェットのすぐ外側の数点の画面色から明るさ(0-1)を出す。
+        GetPixel は物理ピクセル座標。tk の論理座標に DPI 倍率をかける。"""
+        try:
+            u, g = ctypes.windll.user32, ctypes.windll.gdi32
+            # DPI 倍率（論理→物理）。ウィンドウの DPI を優先
+            scale = 1.0
+            try:
+                hwnd = self.r.winfo_id()
+                # winfo_id は Tk の内部ハンドル。親の実 HWND を取る
+                hwnd = u.GetParent(hwnd) or hwnd
+                dpi = ctypes.windll.user32.GetDpiForWindow(hwnd)
+                if dpi:
+                    scale = dpi / 96.0
+            except Exception:
+                try:
+                    scale = float(ctypes.windll.shcore.GetScaleFactorForDevice(0)) / 100.0
+                except Exception:
+                    try:
+                        hdc = u.GetDC(0); dpi = g.GetDeviceCaps(hdc, 88); u.ReleaseDC(0, hdc)
+                        scale = dpi / 96.0
+                    except Exception:
+                        scale = 1.0
+            x = int(self.r.winfo_x() * scale)
+            y = int(self.r.winfo_y() * scale)
+            w = int(self.row_w * scale)
+            h = int(self.row_h * scale)
+            # 仮想画面の物理サイズ（マルチモニタ）
+            vx = u.GetSystemMetrics(76)   # SM_XVIRTUALSCREEN
+            vy = u.GetSystemMetrics(77)
+            vw = u.GetSystemMetrics(78)
+            vh = u.GetSystemMetrics(79)
+            pad = max(4, int(6 * scale))
+            pts = []
+            for i in range(1, 6):
+                px = x + w * i // 6
+                pts += [(px, y - pad), (px, y + h + pad)]
+            pts += [(x - pad, y + h // 2), (x + w + pad, y + h // 2)]
+            dc = u.GetDC(0); vals = []
+            for px, py in pts:
+                if vx <= px < vx + vw and vy <= py < vy + vh:
+                    c = g.GetPixel(dc, px, py)
+                    if c != 0xFFFFFFFF:
+                        r, gg, b = c & 255, (c >> 8) & 255, (c >> 16) & 255
+                        vals.append((0.2126 * r + 0.7152 * gg + 0.0722 * b) / 255)
+            u.ReleaseDC(0, dc)
+            return sum(vals) / len(vals) if vals else None
+        except Exception:
+            return None
+
+    def adapt_bg(self):
+        self.adapt_once(); self.r.after(SAMPLE_MS, self.adapt_bg)
+
+    def adapt_once(self):
+        lum = self.sample_lum()
+        if lum is not None:
+            cur = getattr(self, "bg_alpha", BG_ALPHA_DARK)
+            new = BG_ALPHA_LIGHT if lum > LUM_TO_LIGHT else BG_ALPHA_DARK if lum < LUM_TO_DARK else cur
+            if new != cur:
+                self.bg_alpha = new
+                try: self.bgw.attributes("-alpha", new)
+                except Exception: pass
+
     def keep_bg(self):
         self.sync_bg(); self.r.after(1500, self.keep_bg)
 
@@ -143,6 +212,7 @@ class W:
             os.makedirs(STATE, exist_ok=True)
             home = getattr(self, "home", None)
             x, y = xy or (home[:2] if home else (self.r.winfo_x(), self.r.winfo_y()))
+            self.r.after(300, self.adapt_once)  # 動かした直後にも明るさを確認
             json.dump({"x": x, "y": y, "w": self.r.winfo_width(), "h": self.r.winfo_height()}, open(POS, "w", encoding="utf-8"))
         except Exception: pass
     def toggle(self):
