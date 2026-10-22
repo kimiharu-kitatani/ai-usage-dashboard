@@ -11,7 +11,7 @@ JST = dt.timezone(dt.timedelta(hours=9))
 DM = "#c9ced8"
 BG_ALPHA = 0.25  # 1行表示の背景の濃さ（0=透明〜1=不透明）
 BG_ALPHA_DARK = 0.25   # 後ろが暗いときの濃さ
-BG_ALPHA_LIGHT = 0.6   # 後ろが明るいときの濃さ
+BG_ALPHA_LIGHT = 0.80   # 後ろが明るいときの濃さ
 LUM_TO_LIGHT = 0.6     # 明るさがこれを超えたら LIGHT に
 LUM_TO_DARK = 0.45     # これを下回ったら DARK に（ちらつき防止の幅）
 SAMPLE_MS = 3000       # 背景の明るさを調べる間隔
