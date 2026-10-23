@@ -25,7 +25,7 @@ if (-not $claude) { L 'claude.cmd not found'; exit 1 }
 # npm の claude.cmd は bin\claude.exe を呼ぶ。更新失敗で .exe だけ消えると ping が黙って失敗する
 $claudeExe = Join-Path $env:APPDATA 'npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe'
 if (-not (Test-Path $claudeExe)) {
-  L "claude.exe missing (). Fix: npm install -g @anthropic-ai/claude-code"
+  L ('claude.exe missing ({0}). Fix: npm install -g @anthropic-ai/claude-code' -f $claudeExe)
   exit 1
 }
 $env:AIUSAGE_PING = '1'
