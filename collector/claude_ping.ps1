@@ -1,4 +1,4 @@
-﻿# Claude Pro の利用枠を公式 statusLine 経由で取得するため、隠しコンソールで対話版 claude を1往復だけ起動する
+# Claude Pro の利用枠を公式 statusLine 経由で取得するため、隠しコンソールで対話版 claude を1往復だけ起動する
 param([int]$TimeoutSec = 120, [switch]$IfUsed)
 $state = Join-Path $env:LOCALAPPDATA 'ai-usage-dashboard'
 $work  = Join-Path $env:TEMP 'aiusage-claude-ping'  # Temp 配下は信頼済みフォルダ扱いのため確認画面が出ない
@@ -22,6 +22,12 @@ Set-Content -Path $stamp -Value (Get-Date -Format s)
 $before = if (Test-Path $cache) { (Get-Item $cache).LastWriteTimeUtc } else { [datetime]::MinValue }
 $claude = (Get-Command claude.cmd -ErrorAction SilentlyContinue).Source
 if (-not $claude) { L 'claude.cmd not found'; exit 1 }
+# npm の claude.cmd は bin\claude.exe を呼ぶ。更新失敗で .exe だけ消えると ping が黙って失敗する
+$claudeExe = Join-Path $env:APPDATA 'npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe'
+if (-not (Test-Path $claudeExe)) {
+  L "claude.exe missing (). Fix: npm install -g @anthropic-ai/claude-code"
+  exit 1
+}
 $env:AIUSAGE_PING = '1'
 $proc = Start-Process -FilePath "$env:WINDIR\System32\conhost.exe" -ArgumentList "cmd.exe /d /c `"`"$claude`" --model haiku ok`"" -WorkingDirectory $work -WindowStyle Hidden -PassThru
 $ok = $false
