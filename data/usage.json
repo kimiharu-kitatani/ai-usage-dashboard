@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "fetched_at": "2026-10-24T01:44:42+09:00",
+  "fetched_at": "2026-10-24T01:44:50+09:00",
   "services": {
     "claude": {
       "five_hour": {
-        "used_percent": 78.0,
+        "used_percent": 81.0,
         "resets_at": "2026-10-24T02:40:00+09:00"
       },
       "weekly": {
@@ -13,7 +13,7 @@
       },
       "reset_count": null,
       "source": "Claude Code statusline (最後に Claude Code を使った時点の値)",
-      "as_of": "2026-10-24T01:30:24+09:00",
+      "as_of": "2026-10-24T01:44:44+09:00",
       "error": null
     },
     "codex": {
@@ -27,7 +27,7 @@
       },
       "reset_count": 2,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-10-24T01:44:42+09:00",
+      "as_of": "2026-10-24T01:44:50+09:00",
       "error": null,
       "reset_count_expires_at": "2026-10-30T01:38:03+09:00"
     }
