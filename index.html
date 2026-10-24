@@ -187,7 +187,9 @@ const ICONS = {
   claude: '<svg class="ico" viewBox="0 0 24 24" aria-label="Claude"><g stroke="#D97757" stroke-width="2.6" stroke-linecap="round">' +
     [0,30,60,90,120,150].map(a => '<line x1="12" y1="2.5" x2="12" y2="21.5" transform="rotate(' + a + ' 12 12)"/>').join("") + '</g></svg>',
   codex: '<svg class="ico" viewBox="0 0 24 24" aria-label="Codex"><rect x="1" y="1" width="22" height="22" rx="6" fill="#111"/><path d="M6.5 8l4 4-4 4" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12.5" y1="16.5" x2="17.5" y2="16.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  grok: '<svg class="ico" viewBox="0 0 24 24" aria-label="Grok Bot"><rect x="1" y="1" width="22" height="22" rx="6" fill="#111"/><path d="M7 17L17 7M9.5 7.5h-2v2M14.5 16.5h2v-2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
+const GROK_NOTE = "自動取得できません（公式APIなし）。Grok Bot アプリの設定「Usage & Billing」で確認してください（表示されないアカウントもあります）。";
 const NA = "取得できません";
 const LS_KEY = (k) => "aiusage.manual." + k;
 let DATA = null;
@@ -350,6 +352,19 @@ function render() {
     if (man) node.querySelector(".open-manual").insertAdjacentHTML("beforeend", '<span class="badge">保存済</span>');
     wrap.appendChild(node);
   });
+  // Grok Bot: 自動取得不可のため常に「不明」（推測値は入れない）
+  const gg = document.createElement("div"); gg.className = "mg"; gg.title = "Grok Bot（タップで詳細）";
+  gg.innerHTML = ICONS.grok + '<span class="wl">週</span><span class="mb na-ring"><div class="fill" style="width:0"></div></span><span class="mp na">不明</span>';
+  gg.addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
+  strip.appendChild(gg);
+  const gd = document.createElement("div"); gd.className = "dsv";
+  gd.innerHTML = ICONS.grok + '<div><div class="dl"><span class="k">Grok Bot 週 不明</span></div><div class="sub2" style="font-size:10px;color:var(--muted)"></div></div>';
+  gd.querySelector(".sub2").textContent = GROK_NOTE;
+  det.appendChild(gd);
+  const gc = document.createElement("section"); gc.className = "card";
+  gc.innerHTML = '<div class="card-head"><h2 class="name">Grok Bot</h2><span class="plan"></span></div><div class="rows"><div class="row"><div class="row-head"><span class="label">週間枠</span><span class="val"><span class="na">不明</span></span></div></div></div><div class="note"></div>';
+  gc.querySelector(".note").textContent = GROK_NOTE;
+  wrap.appendChild(gc);
   const mm = document.createElement("div"); mm.className = "mmeta";
   mm.innerHTML = '<span class="t" id="mtime"></span><button type="button" id="mtoggle"></button><button type="button" id="mreload" aria-label="再読み込み">↻</button>';
   strip.appendChild(mm);
