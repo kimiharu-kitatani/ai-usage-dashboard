@@ -69,4 +69,7 @@ if (-not $ok) {
   $ok = Invoke-ClaudeStatuslinePing -BeforeUtc $before2 -Seconds ([Math]::Max(60, [int]($TimeoutSec / 2)))
 }
 L ('statusline updated={0}' -f $ok)
+# wait (max 90s) if another collector holds the lock, so fresh statusline is not skipped
+$lock = Join-Path $state 'collector.lock'
+for ($i = 0; $i -lt 45 -and (Test-Path -LiteralPath $lock); $i++) { Start-Sleep -Seconds 2 }
 & $py (Join-Path $PSScriptRoot 'collector.py') --reason claude-ping | Out-Null

@@ -1,5 +1,5 @@
 # AI利用枠 デスクトップウィジェット（枠なし・1行）。data/usage.json をローカルで読むだけ。
-import json, os, ctypes, subprocess, threading, time, datetime as dt, tkinter as tk
+import json, os, sys, base64, ctypes, subprocess, threading, time, datetime as dt, tkinter as tk
 from ctypes import wintypes
 from tkinter import font as tkfont
 
@@ -7,6 +7,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(os.path.dirname(HERE), "data", "usage.json")
 STATE = os.path.join(os.environ.get("LOCALAPPDATA", HERE), "ai-usage-dashboard")
 POS = os.path.join(STATE, "widget.json")
+NOTIFIED = os.path.join(STATE, "notified.json")
+NOTIFY_MAX_AGE = 6 * 3600  # スリープ等で遅れた通知はこの秒数以内なら出す
 JST = dt.timezone(dt.timedelta(hours=9))
 DM = "#c9ced8"
 BG_ALPHA = 0.25  # 1行表示の背景の濃さ（0=透明〜1=不透明）
@@ -57,6 +59,38 @@ def left(d):
     day, s = divmod(s, 86400); h, s = divmod(s, 3600); m = s // 60
     return "あと" + (f"{day}日" if day else "") + (f"{h}時間" if day or h else "") + f"{m}分"
 
+def short_left(d):
+    """1行表示用の残り時間（1日未満 h:mm、以上 Nd）"""
+    if not d: return ""
+    s = int((d - dt.datetime.now(JST)).total_seconds())
+    if s <= 0: return "0:00"
+    if s >= 86400: return f"{s // 86400}d"
+    return f"{s // 3600}:{s % 3600 // 60:02d}"
+
+WD = "月火水木金土日"
+def outlook(rem, d):
+    """週の残り%とリセット曜日から見通し文（値がなければ None）"""
+    if rem is None or not d: return None
+    w = WD[d.weekday()] + "曜日"
+    if rem >= 50: return f"順調です。{w}のリセットまで余裕を持って利用できる見込みです。"
+    if rem >= 20: return f"やや注意。{w}のリセットまで計画的に。"
+    return f"余裕少なめ。{w}のリセットまで注意。"
+
+def toast(title, body):
+    """Windows のトースト通知（PowerShell の WinRT API。追加インストール不要）"""
+    def q(t): return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("'", "&apos;").replace('"', "&quot;")
+    xml = f"<toast><visual><binding template='ToastGeneric'><text>{q(title)}</text><text>{q(body)}</text></binding></visual></toast>"
+    ps = ("[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null;"
+          "[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] > $null;"
+          "$x = New-Object Windows.Data.Xml.Dom.XmlDocument; $x.LoadXml('" + xml.replace("'", "''") + "');"
+          "$id = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe';"
+          "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($id).Show([Windows.UI.Notifications.ToastNotification]::new($x))")
+    enc = base64.b64encode(ps.encode("utf-16-le")).decode()
+    try:
+        subprocess.Popen(["powershell.exe", "-NoProfile", "-WindowStyle", "Hidden", "-EncodedCommand", enc],
+                         creationflags=0x08000000, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception: pass
+
 def ago(d):
     if not d: return ""
     m = int((dt.datetime.now(JST) - d).total_seconds() // 60)
@@ -80,7 +114,6 @@ class W:
         self.row_w, self.row_h = 10, 10
         self.c = tk.Canvas(self.r, bg=KEY, highlightthickness=0, bd=0)
         self.c.pack()
-        import sys
         self.detail = "--detail" in sys.argv; self.data = None
         self.busy = False; self.status = None; self.err = None; self.spin = 0; self.tip = None
         for wdg in (self.c, self.bgw):
@@ -103,7 +136,8 @@ class W:
             self.first = True; self.r.geometry("+0+0")
             try: self.r.attributes("-alpha", 0.0)
             except Exception: pass
-        self.reload(); self.loop()
+        self.reload(); self.loop(); self.r.after(5000, self.check_resets)
+        if "--test-toast" in sys.argv: toast("AI利用枠ウィジェット", "テスト通知: Claude の5時間枠がリセットされました（表示確認用）")
         self.r.after(300, self.r.focus_force); self.r.after(500, self.keep_bg); self.r.after(800, self.adapt_bg)
 
     def hwnd(self):
@@ -227,6 +261,46 @@ class W:
             self.home = (x, y, w, h, ar, ab)   # 開く前の位置（ユーザーの位置）
         self.detail = not self.detail; self.draw()
 
+    def check_resets(self):
+        """保存された resets_at を過ぎたら1回だけ通知（遅れは6時間まで）。その後に値を取り直す"""
+        try:
+            try: done = json.load(open(NOTIFIED, encoding="utf-8"))
+            except Exception: done = {}
+            now = dt.datetime.now(JST); fired = []; changed = False
+            svcs = (self.data or {}).get("services", {})
+            for key, name in SERVICES:
+                for wk, wl in WINS:
+                    d = todt(((svcs.get(key) or {}).get(wk) or {}).get("resets_at"))
+                    if not d or d > now: continue
+                    k = f"{key}:{wk}:{d.isoformat()}"
+                    if k in done: continue
+                    done[k] = now.isoformat(timespec="seconds"); changed = True
+                    if (now - d).total_seconds() <= NOTIFY_MAX_AGE:
+                        toast(f"{name} の{'5時間' if wk == 'five_hour' else '週間'}枠がリセットされました",
+                              f"リセット時刻 {fmt(d)}")
+                        fired.append(key)
+            if changed:
+                cut = (now - dt.timedelta(days=30)).isoformat()
+                done = {k: v for k, v in done.items() if v >= cut}
+                os.makedirs(STATE, exist_ok=True); json.dump(done, open(NOTIFIED, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+            if fired and not self.busy:
+                # Claude はping 1回（↻と同じ）。Codex だけなら collector のみ（Claude ping なし）
+                if "claude" in fired: self.r.after(60 * 1000, self.refresh)
+                else: self.r.after(60 * 1000, self.fetch_codex)
+        except Exception: pass
+        self.r.after(60 * 1000, self.check_resets)
+
+    def fetch_codex(self):
+        if self.busy: return
+        def run():
+            try:
+                py = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
+                subprocess.run([py if os.path.exists(py) else sys.executable, os.path.join(os.path.dirname(HERE), "collector", "collector.py"),
+                                "--reason", "widget-reset"], timeout=180, creationflags=0x08000000, stdin=subprocess.DEVNULL, capture_output=True)
+            except Exception: pass
+            self.r.after(0, self.reload)
+        threading.Thread(target=run, daemon=True).start()
+
     def loop(self): self.reload(); self.r.after(5 * 60 * 1000, self.loop)
     def reload(self):
         try: self.data = json.load(open(DATA, encoding="utf-8"))
@@ -276,7 +350,10 @@ class W:
                 if rem:
                     c.create_rectangle(x + 2, y - bh / 2 + 2, x + 2 + (bw - 3) * rem / 100, y + bh / 2 - 1, fill=color(rem), width=0)
                 x += bw + 6
-                x = (self.text(x, y, "取得なし", self.fs, MUTED) if rem is None else self.text(x, y, f"{round(rem)}%")) + 6
+                x = (self.text(x, y, "取得なし", self.fs, MUTED) if rem is None else self.text(x, y, f"{round(rem)}%")) + 3
+                sl = short_left(todt(w.get("resets_at")))
+                if sl: x = self.text(x, y, sl, self.fs, MUTED) + 6
+                else: x += 3
         x += 6
         for tag, label, fn in (("b_det", "▲" if self.detail else "▼", self.toggle), ("b_rel", self.rel_label(), self.refresh)):
             c.create_rectangle(x, PAD + 2, x + 16, PAD + H - 2, outline="#9aa1ae", fill=BG, tags=tag)
@@ -311,6 +388,9 @@ class W:
                     self.text(c1, cy, "取得なし" if rem is None else f"残り{round(rem)}%", fdb, DM if rem is None else color(rem))
                     rt = (f"リセット {fmt(d)}（{left(d)}）" if d else "リセット 取得なし")
                     width = max(width, self.text(c2, cy, rt, fd) + PAD + 10); yy += LH
+                wkw = s.get("weekly") or {}; wu = wkw.get("used_percent")
+                ol = outlook(None if wu is None else max(0.0, min(100.0, 100 - float(wu))), todt(wkw.get("resets_at")))
+                if ol: width = max(width, self.text(x0 + 8, yy + LH // 2, ol, fd, FG) + PAD + 10); yy += LH
                 a = todt(s.get("as_of")); rc = s.get("reset_count")
                 old = a and (dt.datetime.now(JST) - a).total_seconds() > 6 * 3600
                 line = f"取得 {fmt(a)}（{ago(a)}）" if a else "取得 不明"
