@@ -1,5 +1,5 @@
 # AI利用枠 デスクトップウィジェット（枠なし・1行）。data/usage.json をローカルで読むだけ。
-import json, os, sys, base64, ctypes, subprocess, threading, time, datetime as dt, tkinter as tk
+import json, os, sys, base64, ctypes, math, subprocess, threading, time, datetime as dt, tkinter as tk
 from ctypes import wintypes
 from tkinter import font as tkfont
 
@@ -20,6 +20,7 @@ SAMPLE_MS = 3000       # 背景の明るさを調べる間隔
 KEY = "#010203"  # 透明にする色（他では使わない）
 HALO = "#000000"
 BG, FG, MUTED, LINE, TRACK = "#1b1e25", "#e8eaf0", "#9aa1ae", "#3a3f4b", "#4b5060"
+PACE_OK, PACE_WARN, PACE_BAD = "#22c55e", "#eab308", "#ef4444"
 SERVICES = [("claude", "Claude"), ("codex", "Codex")]
 WINS = [("five_hour", "5h"), ("weekly", "1w")]
 PAD = 4
@@ -67,6 +68,40 @@ def short_left(d):
     if s >= 86400: return f"{s // 86400}d"
     return f"{s // 3600}:{s % 3600 // 60:02d}"
 
+
+def today_remain(five, weekly):
+    """週ペース残と5h残の小さい方＝今日あと使える%。値が欠ければ unknown。推測しない。"""
+    five = five or {}; weekly = weekly or {}
+    wu = weekly.get("used_percent"); wr = todt(weekly.get("resets_at"))
+    fu = five.get("used_percent"); fr = todt(five.get("resets_at"))
+    if wu is None or wr is None:
+        return {"unknown": True}
+    try: wu = float(wu)
+    except (TypeError, ValueError):
+        return {"unknown": True}
+    start = wr - dt.timedelta(days=7)
+    elapsed = (dt.datetime.now(JST) - start).total_seconds()
+    d = math.ceil(elapsed / 86400)
+    if d < 1: d = 1
+    if d > 7: d = 7
+    week_allowed = d * 100 / 7
+    pace_remain = week_allowed - wu
+    now = dt.datetime.now(JST)
+    if fr is not None and fr < now:
+        five_remain = 100.0
+    elif fu is not None:
+        try: five_remain = 100.0 - float(fu)
+        except (TypeError, ValueError):
+            return {"unknown": True}
+    else:
+        return {"unknown": True}
+    shown = math.floor(max(0.0, min(pace_remain, five_remain)))
+    label = "週ペースで制限中" if pace_remain <= five_remain else "5時間枠で制限中"
+    if wu > week_allowed: color = PACE_BAD
+    elif wu > week_allowed - 10: color = PACE_WARN
+    else: color = PACE_OK
+    return {"unknown": False, "shown": shown, "label": label, "color": color, "week_allowed": week_allowed}
+
 WD = "月火水木金土日"
 def outlook(rem, d):
     """週の残り%とリセット曜日から見通し文（値がなければ None）"""
@@ -104,6 +139,7 @@ class W:
         except Exception: pass
         self.f = tkfont.Font(family="Yu Gothic UI", size=9, weight="bold")
         self.fs = tkfont.Font(family="Yu Gothic UI", size=8)
+        self.ft = tkfont.Font(family="Yu Gothic UI", size=10, weight="bold")  # あとX%
         self.fd = tkfont.Font(family="Yu Gothic UI", size=11)
         self.fdb = tkfont.Font(family="Yu Gothic UI", size=11, weight="bold")
         # 半透明の背景用ウィンドウ（本体の真後ろに置き、一緒に動かす）
@@ -337,6 +373,11 @@ class W:
                 x += 5; c.create_line(x, PAD + 2, x, PAD + H - 2, fill="#9aa1ae", width=2); x += 6
             x = self.icon(key, x, y - 7) + 4
             s = svcs.get(key) or {}
+            tr = today_remain(s.get("five_hour"), s.get("weekly"))
+            if tr.get("unknown"):
+                x = self.text(x, y, "あと不明", self.ft, MUTED) + 4
+            else:
+                x = self.text(x, y, f"あと{tr['shown']}%", self.ft, tr["color"]) + 4
             for wk, wl in WINS:
                 w = s.get(wk) or {}
                 u = w.get("used_percent")
@@ -349,6 +390,10 @@ class W:
                 c.create_rectangle(x + bw + 1, y - 2, x + bw + 3, y + 2, fill="#d0d4dc", outline="#d0d4dc")
                 if rem:
                     c.create_rectangle(x + 2, y - bh / 2 + 2, x + 2 + (bw - 3) * rem / 100, y + bh / 2 - 1, fill=color(rem), width=0)
+                # 週バーに今日の目標ペース縦線
+                if wk == "weekly" and not tr.get("unknown"):
+                    px = x + (bw * min(100.0, max(0.0, tr["week_allowed"])) / 100.0)
+                    c.create_line(px, y - bh / 2 - 1, px, y + bh / 2 + 1, fill=FG, width=2)
                 x += bw + 6
                 x = (self.text(x, y, "取得なし", self.fs, MUTED) if rem is None else self.text(x, y, f"{round(rem)}%")) + 3
                 sl = short_left(todt(w.get("resets_at")))
@@ -380,6 +425,12 @@ class W:
                 if si: yy += 4; c.create_line(x0, yy - 2, max(width, 300) - PAD - 6, yy - 2, fill=LINE); yy += 4
                 self.icon(key, x0, yy + LH // 2 - 7)
                 width = max(width, self.text(x0 + 20, yy + LH // 2, name, fdb) + PAD + 10); yy += LH
+                tr = today_remain(s.get("five_hour"), s.get("weekly"))
+                if tr.get("unknown"):
+                    width = max(width, self.text(x0 + 8, yy + LH // 2, "今日の残り 不明", fd, MUTED) + PAD + 10); yy += LH
+                else:
+                    tline = f"今日の残り あと{tr['shown']}%（{tr['label']}）"
+                    width = max(width, self.text(x0 + 8, yy + LH // 2, tline, fdb, tr["color"]) + PAD + 10); yy += LH
                 for wk, wl in WINS:
                     w = s.get(wk) or {}; u = w.get("used_percent"); d = todt(w.get("resets_at"))
                     rem = None if u is None else max(0.0, min(100.0, 100 - float(u)))
