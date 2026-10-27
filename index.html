@@ -95,14 +95,28 @@
     #cards { gap: 12px; } .card { padding: 12px 14px; }
     .card h2 { font-size: 16px; } .plan { font-size: 12px; }
     .row { padding: 8px 0; } .label { font-size: 13px; } .pct { font-size: 28px; } .pct small { font-size: 13px; }
+    .today-n { font-size: 36px; } .today-l { font-size: 12px; }
     .na { font-size: 14px; } .bar { height: 7px; margin: 4px 0 4px; } .reset { font-size: 13px; }
     .sub, .src, .err { font-size: 11px; } .note { font-size: 12px; } button, .btn { font-size: 12px; padding: 4px 9px; }
   }
+
+  .today-block { text-align: center; padding: 4px 0 6px; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
+  .today-n { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .today-n.na { font-size: 18px; color: var(--muted); font-weight: 700; }
+  .today-l { font-size: 10px; color: var(--muted); margin-top: 1px; }
+  .pace-mark { position: absolute; top: -1px; bottom: -1px; width: 2px; background: var(--text); opacity: .55; z-index: 2; pointer-events: none; transform: translateX(-50%); }
+  .batt .pace-mark { top: 0; bottom: 0; }
   /* compact view */
   .ico { width: 16px; height: 16px; flex: none; display: block; }
   #strip { display: inline-flex; max-width: 100%; flex-wrap: wrap; align-items: center; gap: 3px 8px; background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 4px 6px; }
   .mg { display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
+  .mg.has-today { flex-direction: column; align-items: flex-start; gap: 2px; }
   .mg + .mg { border-left: 1px solid var(--line); padding-left: 8px; }
+  .mg-top { display: flex; align-items: center; gap: 4px; }
+  .mg-today .today-n { font-size: 18px; }
+  .mg-today .today-n.na { font-size: 12px; }
+  .mg-today .today-l { font-size: 9px; }
+  .mg-bars { display: flex; align-items: center; gap: 3px; }
   .wl { font-size: 10px; color: var(--muted); font-weight: 600; margin-left: 2px; }
   .mb { position: relative; width: 26px; height: 12px; border: 1.5px solid var(--muted); border-radius: 3px; padding: 1px; margin-right: 3px; }
   .mb::after { content: ""; position: absolute; right: -4px; top: 3px; width: 2px; height: 4px; background: var(--muted); border-radius: 0 1px 1px 0; }
@@ -230,7 +244,34 @@ function pick(auto, man, manSavedAt, autoAsOf) {
   return { v: null, manual: false };
 }
 
-function windowRow(label, autoW, manW, manSavedAt, autoAsOf) {
+// 今日あと何%使えるか（週ペース残りと5h残りの小さい方）。欠損は不明（推測しない）
+function todayRemain(fiveAuto, fiveMan, weekAuto, weekMan, manSavedAt, autoAsOf) {
+  const wu = pick(num(weekAuto && weekAuto.used_percent), num(weekMan && weekMan.used_percent), manSavedAt, autoAsOf);
+  const wr = pick(weekAuto && weekAuto.resets_at, weekMan && weekMan.resets_at, manSavedAt, autoAsOf);
+  const fu = pick(num(fiveAuto && fiveAuto.used_percent), num(fiveMan && fiveMan.used_percent), manSavedAt, autoAsOf);
+  const fr = pick(fiveAuto && fiveAuto.resets_at, fiveMan && fiveMan.resets_at, manSavedAt, autoAsOf);
+  const weekReset = toDate(wr.v);
+  if (wu.v === null || !weekReset) return { unknown: true };
+  const start = weekReset.getTime() - 7 * 86400000;
+  let d = Math.ceil((Date.now() - start) / 86400000);
+  if (d < 1) d = 1; if (d > 7) d = 7;
+  const weekAllowed = d * 100 / 7;
+  const paceRemain = weekAllowed - wu.v;
+  const fiveReset = toDate(fr.v);
+  let fiveRemain = null;
+  if (fiveReset && fiveReset.getTime() < Date.now()) fiveRemain = 100;
+  else if (fu.v !== null) fiveRemain = 100 - fu.v;
+  if (fiveRemain === null) return { unknown: true };
+  const shown = Math.floor(Math.max(0, Math.min(paceRemain, fiveRemain)));
+  const label = paceRemain <= fiveRemain ? "週ペースで制限中" : "5時間枠で制限中";
+  let color;
+  if (wu.v > weekAllowed) color = "var(--bad)";
+  else if (wu.v > weekAllowed - 10) color = "var(--warn)";
+  else color = "var(--ok)";
+  return { unknown: false, shown, label, color, weekAllowed };
+}
+
+function windowRow(label, autoW, manW, manSavedAt, autoAsOf, pacePct) {
   const p = pick(num(autoW && autoW.used_percent), num(manW && manW.used_percent), manSavedAt, autoAsOf);
   const r = pick(autoW && autoW.resets_at, manW && manW.resets_at, manSavedAt, autoAsOf);
   const row = document.createElement("div"); row.className = "row";
@@ -246,6 +287,12 @@ function windowRow(label, autoW, manW, manSavedAt, autoAsOf) {
   const dn = row.querySelector(".batt"), dv = row.querySelector(".bt");
   dn.style.setProperty("--c", color);
   dn.querySelector(".fill").style.width = (rem === null ? 0 : rem) + "%";
+  if (pacePct != null && !isNaN(pacePct)) {
+    const mark = document.createElement("div"); mark.className = "pace-mark";
+    mark.style.left = Math.min(100, Math.max(0, pacePct)) + "%";
+    mark.title = "今日の目標ペース " + (Math.round(pacePct * 10) / 10) + "%";
+    dn.appendChild(mark);
+  }
   if (rem === null) { dn.classList.add("na-ring"); dv.textContent = "取得なし"; }
   else { dv.textContent = "残り " + (Math.round(rem * 10) / 10) + "%"; }
   if (p.manual) row.querySelector(".val").insertAdjacentHTML("beforeend", '<span class="badge">手入力</span>');
@@ -270,12 +317,25 @@ function render() {
     const autoAsOf = toDate(auto.as_of) || toDate(DATA && DATA.fetched_at);
     node.querySelector(".name").textContent = s.name;
     node.querySelector(".plan").textContent = s.plan;
+    const tr = todayRemain(auto.five_hour, man && man.five_hour, auto.weekly, man && man.weekly, manSavedAt, autoAsOf);
     const rows = node.querySelector(".rows");
+    // 大きい「あと X%」
+    const tb = document.createElement("div"); tb.className = "today-block";
+    if (tr.unknown) {
+      tb.innerHTML = '<div class="today-n na">不明</div><div class="today-l">今日の残り</div>';
+    } else {
+      tb.innerHTML = '<div class="today-n"></div><div class="today-l"></div>';
+      const tn = tb.querySelector(".today-n");
+      tn.textContent = "あと" + tr.shown + "%";
+      tn.style.color = tr.color;
+      tb.querySelector(".today-l").textContent = tr.label;
+    }
+    rows.appendChild(tb);
     const wins = [];
-    [["5h", "5時間枠", "five_hour"], ["1w", "週間枠", "weekly"]].forEach(([sl, ll, k]) => {
-      const r1 = windowRow(ll, auto[k], man && man[k], manSavedAt, autoAsOf);
+    [["5h", "5時間枠", "five_hour", null], ["1w", "週間枠", "weekly", tr.unknown ? null : tr.weekAllowed]].forEach(([sl, ll, k, pace]) => {
+      const r1 = windowRow(ll, auto[k], man && man[k], manSavedAt, autoAsOf, pace);
       rows.appendChild(r1);
-      wins.push({ sl, row: r1 });
+      wins.push({ sl, row: r1, pace });
     });
 
     // リセット回数
@@ -292,18 +352,47 @@ function render() {
     rr.querySelector(".sub").textContent = subs.join(" ／ ");
     rows.appendChild(rr);
     // compact strip + terse details
-    const g = document.createElement("div"); g.className = "mg"; g.title = s.name + "（タップで詳細）";
-    g.innerHTML = ICONS[s.key];
+    const g = document.createElement("div"); g.className = "mg has-today"; g.title = s.name + "（タップで詳細）";
+    const gTop = document.createElement("div"); gTop.className = "mg-top";
+    gTop.innerHTML = ICONS[s.key];
+    const gToday = document.createElement("div"); gToday.className = "mg-today";
+    if (tr.unknown) {
+      gToday.innerHTML = '<div class="today-n na">不明</div><div class="today-l">今日の残り</div>';
+    } else {
+      gToday.innerHTML = '<div class="today-n"></div><div class="today-l"></div>';
+      const tn = gToday.querySelector(".today-n");
+      tn.textContent = "あと" + tr.shown + "%";
+      tn.style.color = tr.color;
+      gToday.querySelector(".today-l").textContent = tr.label;
+    }
+    gTop.appendChild(gToday);
+    g.appendChild(gTop);
+    const gBars = document.createElement("div"); gBars.className = "mg-bars";
     const dv = document.createElement("div"); dv.className = "dsv"; dv.innerHTML = ICONS[s.key] + "<div></div>";
     const dbox = dv.lastChild;
-    wins.forEach(({ sl, row }) => {
+    // detail: big number first
+    const dl0 = document.createElement("div"); dl0.className = "dl";
+    if (tr.unknown) dl0.innerHTML = '<span class="k">今日の残り 不明</span>';
+    else {
+      dl0.innerHTML = '<span class="k"></span>';
+      const k = dl0.querySelector(".k");
+      k.textContent = "今日の残り あと" + tr.shown + "%（" + tr.label + "）";
+      k.style.color = tr.color;
+    }
+    dbox.appendChild(dl0);
+    wins.forEach(({ sl, row, pace }) => {
       const src = row.querySelector(".batt"), t = src.querySelector(".bt").textContent, na = !t.startsWith("残り");
       const mb = document.createElement("span"); mb.className = "mb" + (na ? " na-ring" : "");
       mb.style.setProperty("--c", src.style.getPropertyValue("--c"));
       mb.innerHTML = '<div class="fill"></div>'; mb.firstChild.style.width = src.querySelector(".fill").style.width;
+      if (pace != null && !isNaN(pace)) {
+        const mark = document.createElement("div"); mark.className = "pace-mark";
+        mark.style.left = Math.min(100, Math.max(0, pace)) + "%";
+        mb.appendChild(mark);
+      }
       const wl = document.createElement("span"); wl.className = "wl"; wl.textContent = sl;
       const mp = document.createElement("span"); mp.className = "mp" + (na ? " na" : ""); mp.textContent = na ? "取得なし" : t.replace("残り ", "");
-      g.append(wl, mb, mp);
+      gBars.append(wl, mb, mp);
       const cd = row.querySelector(".countdown");
       const l = document.createElement("div"); l.className = "dl";
       l.innerHTML = '<span class="k"></span> ↻ <span class="rt"></span> <span class="countdown"></span>';
@@ -312,6 +401,7 @@ function render() {
       const c2 = l.querySelector(".countdown"); if (cd.dataset.t) { c2.dataset.t = cd.dataset.t; c2.textContent = cd.textContent; }
       dbox.appendChild(l);
     });
+    g.appendChild(gBars);
     g.addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
     strip.appendChild(g);
     const l3 = document.createElement("div"); l3.className = "dl sub2";
