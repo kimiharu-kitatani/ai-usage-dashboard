@@ -104,7 +104,9 @@
   .today-n { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
   .today-n.na { font-size: 18px; color: var(--muted); font-weight: 700; }
   .today-l { font-size: 10px; color: var(--muted); margin-top: 1px; }
-  .pace-mark { position: absolute; top: -1px; bottom: -1px; width: 2px; background: var(--text); opacity: .55; z-index: 2; pointer-events: none; transform: translateX(-50%); }
+  .day-tick { position: absolute; top: 22%; bottom: 22%; width: 1px; background: var(--muted); opacity: .35; z-index: 1; pointer-events: none; transform: translateX(-50%); }
+  .batt .day-tick { top: 20%; bottom: 20%; }
+  .pace-mark { position: absolute; top: -1px; bottom: -1px; width: 2px; background: #fff; opacity: .95; z-index: 2; pointer-events: none; transform: translateX(-50%); box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
   .batt .pace-mark { top: 0; bottom: 0; }
   /* compact view */
   .ico { width: 16px; height: 16px; flex: none; display: block; }
@@ -271,7 +273,7 @@ function todayRemain(fiveAuto, fiveMan, weekAuto, weekMan, manSavedAt, autoAsOf)
   return { unknown: false, shown, label, color, weekAllowed };
 }
 
-function windowRow(label, autoW, manW, manSavedAt, autoAsOf, pacePct) {
+function windowRow(label, autoW, manW, manSavedAt, autoAsOf, pacePct, isWeekly) {
   const p = pick(num(autoW && autoW.used_percent), num(manW && manW.used_percent), manSavedAt, autoAsOf);
   const r = pick(autoW && autoW.resets_at, manW && manW.resets_at, manSavedAt, autoAsOf);
   const row = document.createElement("div"); row.className = "row";
@@ -287,6 +289,9 @@ function windowRow(label, autoW, manW, manSavedAt, autoAsOf, pacePct) {
   const dn = row.querySelector(".batt"), dv = row.querySelector(".bt");
   dn.style.setProperty("--c", color);
   dn.querySelector(".fill").style.width = (rem === null ? 0 : rem) + "%";
+  if (isWeekly) {
+    for (let _di = 1; _di <= 6; _di++) { const _t = document.createElement("div"); _t.className = "day-tick"; _t.style.left = (_di * 100 / 7) + "%"; dn.appendChild(_t); }
+  }
   if (pacePct != null && !isNaN(pacePct)) {
     const mark = document.createElement("div"); mark.className = "pace-mark";
     mark.style.left = Math.min(100, Math.max(0, pacePct)) + "%";
@@ -333,7 +338,7 @@ function render() {
     rows.appendChild(tb);
     const wins = [];
     [["5h", "5時間枠", "five_hour", null], ["1w", "週間枠", "weekly", tr.unknown ? null : tr.weekAllowed]].forEach(([sl, ll, k, pace]) => {
-      const r1 = windowRow(ll, auto[k], man && man[k], manSavedAt, autoAsOf, pace);
+      const r1 = windowRow(ll, auto[k], man && man[k], manSavedAt, autoAsOf, pace, k === "weekly");
       rows.appendChild(r1);
       wins.push({ sl, row: r1, pace });
     });
@@ -385,6 +390,9 @@ function render() {
       const mb = document.createElement("span"); mb.className = "mb" + (na ? " na-ring" : "");
       mb.style.setProperty("--c", src.style.getPropertyValue("--c"));
       mb.innerHTML = '<div class="fill"></div>'; mb.firstChild.style.width = src.querySelector(".fill").style.width;
+      if (sl === "1w") {
+        for (let _di = 1; _di <= 6; _di++) { const _t = document.createElement("div"); _t.className = "day-tick"; _t.style.left = (_di * 100 / 7) + "%"; mb.appendChild(_t); }
+      }
       if (pace != null && !isNaN(pace)) {
         const mark = document.createElement("div"); mark.className = "pace-mark";
         mark.style.left = Math.min(100, Math.max(0, pace)) + "%";

@@ -390,10 +390,17 @@ class W:
                 c.create_rectangle(x + bw + 1, y - 2, x + bw + 3, y + 2, fill="#d0d4dc", outline="#d0d4dc")
                 if rem:
                     c.create_rectangle(x + 2, y - bh / 2 + 2, x + 2 + (bw - 3) * rem / 100, y + bh / 2 - 1, fill=color(rem), width=0)
-                # 週バーに今日の目標ペース縦線
-                if wk == "weekly" and not tr.get("unknown"):
-                    px = x + (bw * min(100.0, max(0.0, tr["week_allowed"])) / 100.0)
-                    c.create_line(px, y - bh / 2 - 1, px, y + bh / 2 + 1, fill=FG, width=2)
+                # 週バー: 7日の薄い目盛り（1/7..6/7）＋今日の目標ペース（明るい太線）
+                if wk == "weekly":
+                    top, bot = y - bh / 2, y + bh / 2
+                    for di in range(1, 7):
+                        tx = x + bw * di / 7
+                        # 短い・薄いグレー（ペース線と区別）
+                        c.create_line(tx, top + 2, tx, bot - 2, fill="#6b7280", width=1)
+                    if not tr.get("unknown"):
+                        px = x + (bw * min(100.0, max(0.0, tr["week_allowed"])) / 100.0)
+                        # フル高さ・明るい白・やや太い
+                        c.create_line(px, top - 1, px, bot + 1, fill="#ffffff", width=2)
                 x += bw + 6
                 x = (self.text(x, y, "取得なし", self.fs, MUTED) if rem is None else self.text(x, y, f"{round(rem)}%")) + 3
                 sl = short_left(todt(w.get("resets_at")))
