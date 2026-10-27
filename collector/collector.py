@@ -14,6 +14,7 @@ AI usage-limit collector (Claude Code / Codex) -> data/usage.json
   python collector.py --throttle-min 10   # 前回実行から10分未満なら何もしない（フックから使用）
 """
 import argparse
+import math
 import datetime as dt
 import glob
 import json
@@ -598,6 +599,92 @@ def main():
         release_lock()
 
 
+
+def _parse_iso(s):
+    if not s:
+        return None
+    try:
+        d = dt.datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=JST)
+        return d.astimezone(JST)
+    except Exception:
+        return None
+
+
+def week_start_of(resets_at):
+    d = _parse_iso(resets_at)
+    if not d:
+        return None
+    return d - dt.timedelta(days=7)
+
+
+def day_index_of(week_start, now=None):
+    """Day 1..7. Boundaries = week_start + k*24h (floor elapsed/24h + 1)."""
+    if week_start is None:
+        return None
+    now = now or dt.datetime.now(JST)
+    elapsed = (now - week_start).total_seconds()
+    if elapsed < 0:
+        return 1
+    d = int(elapsed // 86400) + 1
+    if d < 1:
+        d = 1
+    if d > 7:
+        d = 7
+    return d
+
+
+def update_day_track(svc, old_svc):
+    """Keep week_start + day_start_used[day] in svc["day_track"].
+    New day index → day_start_used = last_weekly_used from before the boundary
+    (previous fetch). Day 1 with no prior in this week → 0. Missing → null (不明).
+    """
+    weekly = (svc or {}).get("weekly") or {}
+    wu = weekly.get("used_percent")
+    ws = week_start_of(weekly.get("resets_at"))
+    old_track = ((old_svc or {}).get("day_track") or {}) if old_svc else {}
+    if ws is None or wu is None:
+        if old_track:
+            svc["day_track"] = old_track
+        return
+    try:
+        wu = float(wu)
+    except (TypeError, ValueError):
+        if old_track:
+            svc["day_track"] = old_track
+        return
+    ws_iso = ws.isoformat(timespec="seconds")
+    old_ws = _parse_iso(old_track.get("week_start"))
+    same_week = old_ws is not None and abs((old_ws - ws).total_seconds()) < 120
+    if same_week:
+        day_start_used = dict(old_track.get("day_start_used") or {})
+        # normalize keys to str
+        day_start_used = {str(k): v for k, v in day_start_used.items()}
+        last_wu = old_track.get("last_weekly_used")
+        try:
+            last_wu = float(last_wu) if last_wu is not None else None
+        except (TypeError, ValueError):
+            last_wu = None
+    else:
+        day_start_used = {}
+        last_wu = None
+    d = day_index_of(ws)
+    dkey = str(d)
+    if dkey not in day_start_used:
+        if d == 1:
+            day_start_used[dkey] = 0.0
+        elif last_wu is not None:
+            day_start_used[dkey] = last_wu
+        else:
+            day_start_used[dkey] = None  # 不明（推測しない）
+    svc["day_track"] = {
+        "week_start": ws_iso,
+        "day_start_used": day_start_used,
+        "last_weekly_used": wu,
+    }
+
+
 def run(a):
     data = {"schema": 1, "fetched_at": None, "services": {}}
     old = {}
@@ -618,6 +705,11 @@ def run(a):
             s["error"] = "unexpected: %s" % e
             data["services"][name] = s
         data["services"][name]["error"] = sanitize(data["services"][name].get("error"))
+        # 今日の枠用: 日境界時点の週使用率を記録（既存キーは維持）
+        try:
+            update_day_track(data["services"][name], old.get(name))
+        except Exception as e:
+            log("day_track error (%s): %s" % (name, e))
         log("%s: %s" % (name, json.dumps(data["services"][name], ensure_ascii=False)))
     data["fetched_at"] = dt.datetime.now(JST).isoformat(timespec="seconds")
 

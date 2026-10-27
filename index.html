@@ -246,31 +246,54 @@ function pick(auto, man, manSavedAt, autoAsOf) {
   return { v: null, manual: false };
 }
 
-// 今日あと何%使えるか（週ペース残りと5h残りの小さい方）。欠損は不明（推測しない）
-function todayRemain(fiveAuto, fiveMan, weekAuto, weekMan, manSavedAt, autoAsOf) {
+// 今日の枠の使用率（day_track.day_start_used 必須。推測しない）
+function todayRemain(fiveAuto, fiveMan, weekAuto, weekMan, manSavedAt, autoAsOf, dayTrack) {
   const wu = pick(num(weekAuto && weekAuto.used_percent), num(weekMan && weekMan.used_percent), manSavedAt, autoAsOf);
   const wr = pick(weekAuto && weekAuto.resets_at, weekMan && weekMan.resets_at, manSavedAt, autoAsOf);
   const fu = pick(num(fiveAuto && fiveAuto.used_percent), num(fiveMan && fiveMan.used_percent), manSavedAt, autoAsOf);
   const fr = pick(fiveAuto && fiveAuto.resets_at, fiveMan && fiveMan.resets_at, manSavedAt, autoAsOf);
   const weekReset = toDate(wr.v);
   if (wu.v === null || !weekReset) return { unknown: true };
-  const start = weekReset.getTime() - 7 * 86400000;
-  let d = Math.ceil((Date.now() - start) / 86400000);
+  const track = dayTrack || {};
+  const wsRec = toDate(track.week_start);
+  const start = wsRec ? wsRec.getTime() : (weekReset.getTime() - 7 * 86400000);
+  let d = Math.floor((Date.now() - start) / 86400000) + 1;
   if (d < 1) d = 1; if (d > 7) d = 7;
   const weekAllowed = d * 100 / 7;
-  const paceRemain = weekAllowed - wu.v;
+  const map = track.day_start_used || {};
+  const raw = (String(d) in map) ? map[String(d)] : map[d];
+  if (raw === undefined || raw === null) return { unknown: true };
+  const dsu = num(raw);
+  if (dsu === null) return { unknown: true };
+  const todayQuota = weekAllowed - dsu;
+  const todayUsed = wu.v - dsu;
   const fiveReset = toDate(fr.v);
-  let fiveRemain = null;
-  if (fiveReset && fiveReset.getTime() < Date.now()) fiveRemain = 100;
-  else if (fu.v !== null) fiveRemain = 100 - fu.v;
+  let fiveRemain = null, fiveUsed = null;
+  if (fiveReset && fiveReset.getTime() < Date.now()) { fiveRemain = 100; fiveUsed = 0; }
+  else if (fu.v !== null) { fiveUsed = fu.v; fiveRemain = 100 - fu.v; }
   if (fiveRemain === null) return { unknown: true };
-  const shown = Math.floor(Math.max(0, Math.min(paceRemain, fiveRemain)));
-  const label = paceRemain <= fiveRemain ? "週ペースで制限中" : "5時間枠で制限中";
+  if (todayQuota <= 0) {
+    return { unknown: false, noQuota: true, shown: null, label: "今日の枠なし", color: "var(--bad)",
+             weekAllowed, todayQuota, todayUsed, fiveLimited: false };
+  }
+  const remainToday = todayQuota - todayUsed;
+  const fiveLimited = fiveRemain < remainToday;
+  let pct, label;
+  if (fiveLimited) { pct = fiveUsed; label = "5時間枠で制限中"; }
+  else { pct = (todayUsed / todayQuota) * 100; label = "今日の枠"; }
+  const shown = Math.round(pct);
   let color;
-  if (wu.v > weekAllowed) color = "var(--bad)";
-  else if (wu.v > weekAllowed - 10) color = "var(--warn)";
+  if (pct > 100) color = "var(--bad)";
+  else if (pct >= 80) color = "var(--warn)";
   else color = "var(--ok)";
-  return { unknown: false, shown, label, color, weekAllowed };
+  return { unknown: false, noQuota: false, shown, label, color, weekAllowed, todayQuota, todayUsed, fiveLimited, pct };
+}
+function todayLine(tr) {
+  if (tr.unknown) return "今日の枠 不明";
+  if (tr.noQuota) return "今日の枠なし";
+  const tq = Math.round(tr.todayQuota), tu = Math.round(Math.max(0, tr.todayUsed));
+  if (tr.fiveLimited) return "今日の枠 " + tq + "% のうち " + tu + "% 使用（" + tr.shown + "%・5時間枠で制限中）";
+  return "今日の枠 " + tq + "% のうち " + tu + "% 使用（" + tr.shown + "%）";
 }
 
 function windowRow(label, autoW, manW, manSavedAt, autoAsOf, pacePct, isWeekly) {
@@ -322,22 +345,27 @@ function render() {
     const autoAsOf = toDate(auto.as_of) || toDate(DATA && DATA.fetched_at);
     node.querySelector(".name").textContent = s.name;
     node.querySelector(".plan").textContent = s.plan;
-    const tr = todayRemain(auto.five_hour, man && man.five_hour, auto.weekly, man && man.weekly, manSavedAt, autoAsOf);
+    const tr = todayRemain(auto.five_hour, man && man.five_hour, auto.weekly, man && man.weekly, manSavedAt, autoAsOf, auto.day_track);
     const rows = node.querySelector(".rows");
     // 大きい「あと X%」
     const tb = document.createElement("div"); tb.className = "today-block";
     if (tr.unknown) {
-      tb.innerHTML = '<div class="today-n na">不明</div><div class="today-l">今日の残り</div>';
+      tb.innerHTML = '<div class="today-n na">不明</div><div class="today-l">今日の枠</div>';
+    } else if (tr.noQuota) {
+      tb.innerHTML = '<div class="today-n"></div><div class="today-l"></div>';
+      const tn = tb.querySelector(".today-n");
+      tn.textContent = "枠なし"; tn.style.color = tr.color;
+      tb.querySelector(".today-l").textContent = tr.label;
     } else {
       tb.innerHTML = '<div class="today-n"></div><div class="today-l"></div>';
       const tn = tb.querySelector(".today-n");
-      tn.textContent = "あと" + tr.shown + "%";
+      tn.textContent = tr.shown + "%";
       tn.style.color = tr.color;
-      tb.querySelector(".today-l").textContent = tr.label;
+      tb.querySelector(".today-l").textContent = todayLine(tr);
     }
     rows.appendChild(tb);
     const wins = [];
-    [["5h", "5時間枠", "five_hour", null], ["1w", "週間枠", "weekly", tr.unknown ? null : tr.weekAllowed]].forEach(([sl, ll, k, pace]) => {
+    [["5h", "5時間枠", "five_hour", null], ["1w", "週間枠", "weekly", (tr.weekAllowed != null ? tr.weekAllowed : null)]].forEach(([sl, ll, k, pace]) => {
       const r1 = windowRow(ll, auto[k], man && man[k], manSavedAt, autoAsOf, pace, k === "weekly");
       rows.appendChild(r1);
       wins.push({ sl, row: r1, pace });
@@ -362,11 +390,16 @@ function render() {
     gTop.innerHTML = ICONS[s.key];
     const gToday = document.createElement("div"); gToday.className = "mg-today";
     if (tr.unknown) {
-      gToday.innerHTML = '<div class="today-n na">不明</div><div class="today-l">今日の残り</div>';
+      gToday.innerHTML = '<div class="today-n na">不明</div><div class="today-l">今日の枠</div>';
+    } else if (tr.noQuota) {
+      gToday.innerHTML = '<div class="today-n"></div><div class="today-l"></div>';
+      const tn = gToday.querySelector(".today-n");
+      tn.textContent = "枠なし"; tn.style.color = tr.color;
+      gToday.querySelector(".today-l").textContent = "今日の枠なし";
     } else {
       gToday.innerHTML = '<div class="today-n"></div><div class="today-l"></div>';
       const tn = gToday.querySelector(".today-n");
-      tn.textContent = "あと" + tr.shown + "%";
+      tn.textContent = tr.shown + "%";
       tn.style.color = tr.color;
       gToday.querySelector(".today-l").textContent = tr.label;
     }
@@ -377,11 +410,11 @@ function render() {
     const dbox = dv.lastChild;
     // detail: big number first
     const dl0 = document.createElement("div"); dl0.className = "dl";
-    if (tr.unknown) dl0.innerHTML = '<span class="k">今日の残り 不明</span>';
+    if (tr.unknown) dl0.innerHTML = '<span class="k">今日の枠 不明</span>';
     else {
       dl0.innerHTML = '<span class="k"></span>';
       const k = dl0.querySelector(".k");
-      k.textContent = "今日の残り あと" + tr.shown + "%（" + tr.label + "）";
+      k.textContent = todayLine(tr);
       k.style.color = tr.color;
     }
     dbox.appendChild(dl0);

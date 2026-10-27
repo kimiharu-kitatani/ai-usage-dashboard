@@ -69,9 +69,12 @@ def short_left(d):
     return f"{s // 3600}:{s % 3600 // 60:02d}"
 
 
-def today_remain(five, weekly):
-    """週ペース残と5h残の小さい方＝今日あと使える%。値が欠ければ unknown。推測しない。"""
-    five = five or {}; weekly = weekly or {}
+def today_quota(five, weekly, day_track):
+    """今日の枠の使用率。day_track.day_start_used[d] が必要。推測しない。
+    戻り: unknown / no_quota / shown(pct) / label / color / week_allowed /
+          today_quota / today_used / five_limited
+    """
+    five = five or {}; weekly = weekly or {}; day_track = day_track or {}
     wu = weekly.get("used_percent"); wr = todt(weekly.get("resets_at"))
     fu = five.get("used_percent"); fr = todt(five.get("resets_at"))
     if wu is None or wr is None:
@@ -79,28 +82,74 @@ def today_remain(five, weekly):
     try: wu = float(wu)
     except (TypeError, ValueError):
         return {"unknown": True}
-    start = wr - dt.timedelta(days=7)
-    elapsed = (dt.datetime.now(JST) - start).total_seconds()
-    d = math.ceil(elapsed / 86400)
+    # week_start: prefer recorded, else resets_at - 7d
+    ws = todt(day_track.get("week_start")) or (wr - dt.timedelta(days=7))
+    elapsed = (dt.datetime.now(JST) - ws).total_seconds()
+    d = int(elapsed // 86400) + 1 if elapsed >= 0 else 1
     if d < 1: d = 1
     if d > 7: d = 7
     week_allowed = d * 100 / 7
-    pace_remain = week_allowed - wu
+    dsu_map = day_track.get("day_start_used") or {}
+    if str(d) not in dsu_map and d not in dsu_map:
+        return {"unknown": True}
+    dsu = dsu_map.get(str(d), dsu_map.get(d))
+    if dsu is None:
+        return {"unknown": True}
+    try: dsu = float(dsu)
+    except (TypeError, ValueError):
+        return {"unknown": True}
+    today_q = week_allowed - dsu
+    today_u = wu - dsu
     now = dt.datetime.now(JST)
     if fr is not None and fr < now:
         five_remain = 100.0
+        five_used = 0.0
     elif fu is not None:
-        try: five_remain = 100.0 - float(fu)
+        try:
+            five_used = float(fu)
+            five_remain = 100.0 - five_used
         except (TypeError, ValueError):
             return {"unknown": True}
     else:
         return {"unknown": True}
-    shown = math.floor(max(0.0, min(pace_remain, five_remain)))
-    label = "週ペースで制限中" if pace_remain <= five_remain else "5時間枠で制限中"
-    if wu > week_allowed: color = PACE_BAD
-    elif wu > week_allowed - 10: color = PACE_WARN
+    if today_q <= 0:
+        return {
+            "unknown": False, "no_quota": True, "shown": None,
+            "label": "今日の枠なし", "color": PACE_BAD,
+            "week_allowed": week_allowed, "today_quota": today_q,
+            "today_used": today_u, "five_limited": False, "day": d,
+        }
+    remain_today = today_q - today_u
+    five_limited = five_remain < remain_today
+    if five_limited:
+        pct = five_used
+        label = "5時間枠で制限中"
+    else:
+        pct = (today_u / today_q) * 100.0
+        label = "今日の枠"
+    shown = int(round(pct))
+    if pct > 100: color = PACE_BAD
+    elif pct >= 80: color = PACE_WARN
     else: color = PACE_OK
-    return {"unknown": False, "shown": shown, "label": label, "color": color, "week_allowed": week_allowed}
+    return {
+        "unknown": False, "no_quota": False, "shown": shown, "label": label,
+        "color": color, "week_allowed": week_allowed,
+        "today_quota": today_q, "today_used": today_u,
+        "five_limited": five_limited, "day": d, "pct": pct,
+    }
+
+def today_line(tr):
+    """詳細用の一文。"""
+    if tr.get("unknown"):
+        return "今日の枠 不明"
+    if tr.get("no_quota"):
+        return "今日の枠なし"
+    tq = int(round(tr["today_quota"]))
+    tu = int(round(max(0.0, tr["today_used"])))
+    if tr.get("five_limited"):
+        return f"今日の枠 {tq}% のうち {tu}% 使用（{tr['shown']}%・5時間枠で制限中）"
+    return f"今日の枠 {tq}% のうち {tu}% 使用（{tr['shown']}%）"
+
 
 WD = "月火水木金土日"
 def outlook(rem, d):
@@ -373,11 +422,13 @@ class W:
                 x += 5; c.create_line(x, PAD + 2, x, PAD + H - 2, fill="#9aa1ae", width=2); x += 6
             x = self.icon(key, x, y - 7) + 4
             s = svcs.get(key) or {}
-            tr = today_remain(s.get("five_hour"), s.get("weekly"))
+            tr = today_quota(s.get("five_hour"), s.get("weekly"), s.get("day_track"))
             if tr.get("unknown"):
-                x = self.text(x, y, "あと不明", self.ft, MUTED) + 4
+                x = self.text(x, y, "今日不明", self.ft, MUTED) + 4
+            elif tr.get("no_quota"):
+                x = self.text(x, y, "枠なし", self.ft, PACE_BAD) + 4
             else:
-                x = self.text(x, y, f"あと{tr['shown']}%", self.ft, tr["color"]) + 4
+                x = self.text(x, y, f"今日{tr['shown']}%", self.ft, tr["color"]) + 4
             for wk, wl in WINS:
                 w = s.get(wk) or {}
                 u = w.get("used_percent")
@@ -395,11 +446,15 @@ class W:
                     top, bot = y - bh / 2, y + bh / 2
                     for di in range(1, 7):
                         tx = x + bw * di / 7
-                        # 短い・薄いグレー（ペース線と区別）
                         c.create_line(tx, top + 2, tx, bot - 2, fill="#6b7280", width=1)
-                    if not tr.get("unknown"):
-                        px = x + (bw * min(100.0, max(0.0, tr["week_allowed"])) / 100.0)
-                        # フル高さ・明るい白・やや太い
+                    wa = tr.get("week_allowed")
+                    if wa is None and todt((s.get("weekly") or {}).get("resets_at")):
+                        _wr = todt(s["weekly"]["resets_at"]); _ws = _wr - dt.timedelta(days=7)
+                        _el = (dt.datetime.now(JST) - _ws).total_seconds()
+                        _d = max(1, min(7, int(_el // 86400) + 1 if _el >= 0 else 1))
+                        wa = _d * 100 / 7
+                    if wa is not None:
+                        px = x + (bw * min(100.0, max(0.0, wa)) / 100.0)
                         c.create_line(px, top - 1, px, bot + 1, fill="#ffffff", width=2)
                 x += bw + 6
                 x = (self.text(x, y, "取得なし", self.fs, MUTED) if rem is None else self.text(x, y, f"{round(rem)}%")) + 3
@@ -432,12 +487,10 @@ class W:
                 if si: yy += 4; c.create_line(x0, yy - 2, max(width, 300) - PAD - 6, yy - 2, fill=LINE); yy += 4
                 self.icon(key, x0, yy + LH // 2 - 7)
                 width = max(width, self.text(x0 + 20, yy + LH // 2, name, fdb) + PAD + 10); yy += LH
-                tr = today_remain(s.get("five_hour"), s.get("weekly"))
-                if tr.get("unknown"):
-                    width = max(width, self.text(x0 + 8, yy + LH // 2, "今日の残り 不明", fd, MUTED) + PAD + 10); yy += LH
-                else:
-                    tline = f"今日の残り あと{tr['shown']}%（{tr['label']}）"
-                    width = max(width, self.text(x0 + 8, yy + LH // 2, tline, fdb, tr["color"]) + PAD + 10); yy += LH
+                tr = today_quota(s.get("five_hour"), s.get("weekly"), s.get("day_track"))
+                tline = today_line(tr)
+                tcol = MUTED if tr.get("unknown") else tr.get("color", FG)
+                width = max(width, self.text(x0 + 8, yy + LH // 2, tline, fdb if not tr.get("unknown") else fd, tcol) + PAD + 10); yy += LH
                 for wk, wl in WINS:
                     w = s.get(wk) or {}; u = w.get("used_percent"); d = todt(w.get("resets_at"))
                     rem = None if u is None else max(0.0, min(100.0, 100 - float(u)))
