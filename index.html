@@ -150,6 +150,7 @@
     <span class="meta" id="fetched" title="自動取得: PCで Claude Code / Codex を使ったときに更新（最短10分間隔）">読み込み中…</span>
     <span class="stale" id="stale" hidden></span>
     <span class="spacer"></span>
+    <a class="btn" href="help.html" title="計算の見方">?</a>
     <button id="reload" type="button" aria-label="再読み込み">↻</button>
   </header>
   <div id="strip"></div>
@@ -246,7 +247,13 @@ function pick(auto, man, manSavedAt, autoAsOf) {
   return { v: null, manual: false };
 }
 
-// 今日の枠の使用率（day_track.day_start_used 必須。推測しない）
+// 今日の枠の残量%（day_track.day_start_used 必須。推測しない）
+function remColor(rem) {
+  if (rem === null || rem === undefined) return "var(--muted)";
+  if (rem >= 50) return "var(--ok)";
+  if (rem >= 20) return "var(--warn)";
+  return "var(--bad)";
+}
 function todayRemain(fiveAuto, fiveMan, weekAuto, weekMan, manSavedAt, autoAsOf, dayTrack) {
   const wu = pick(num(weekAuto && weekAuto.used_percent), num(weekMan && weekMan.used_percent), manSavedAt, autoAsOf);
   const wr = pick(weekAuto && weekAuto.resets_at, weekMan && weekMan.resets_at, manSavedAt, autoAsOf);
@@ -277,23 +284,29 @@ function todayRemain(fiveAuto, fiveMan, weekAuto, weekMan, manSavedAt, autoAsOf,
              weekAllowed, todayQuota, todayUsed, fiveLimited: false };
   }
   const remainToday = todayQuota - todayUsed;
+  const remainPct = Math.max(0, (remainToday / todayQuota) * 100);
   const fiveLimited = fiveRemain < remainToday;
-  let pct, label;
-  if (fiveLimited) { pct = fiveUsed; label = "5時間枠で制限中"; }
-  else { pct = (todayUsed / todayQuota) * 100; label = "今日の枠"; }
-  const shown = Math.round(pct);
-  let color;
-  if (pct > 100) color = "var(--bad)";
-  else if (pct >= 80) color = "var(--warn)";
-  else color = "var(--ok)";
-  return { unknown: false, noQuota: false, shown, label, color, weekAllowed, todayQuota, todayUsed, fiveLimited, pct };
+  let shown, label, remForColor;
+  if (fiveLimited) {
+    shown = Math.max(0, Math.floor(fiveRemain));
+    label = "5時間枠で制限中";
+    remForColor = fiveRemain;
+  } else {
+    shown = Math.max(0, Math.floor(remainPct));
+    label = "今日の分で制限中";
+    remForColor = remainPct;
+  }
+  return { unknown: false, noQuota: false, shown, label, color: remColor(remForColor),
+           weekAllowed, todayQuota, todayUsed, fiveLimited, remainPct, fiveRemain };
 }
 function todayLine(tr) {
   if (tr.unknown) return "今日の枠 不明";
   if (tr.noQuota) return "今日の枠なし";
-  const tq = Math.round(tr.todayQuota), tu = Math.round(Math.max(0, tr.todayUsed));
-  if (tr.fiveLimited) return "今日の枠 " + tq + "% のうち " + tu + "% 使用（" + tr.shown + "%・5時間枠で制限中）";
-  return "今日の枠 " + tq + "% のうち " + tu + "% 使用（" + tr.shown + "%）";
+  const tq = tr.todayQuota, tu = Math.max(0, tr.todayUsed);
+  const tqS = (Math.round(tq * 10) / 10).toString();
+  const tuS = (Math.round(tu * 10) / 10).toString();
+  const base = "今日使える分 " + tqS + "% のうち " + tuS + "% 使用（週の枠全体に対する%）";
+  return base + (tr.fiveLimited ? " · 5時間枠で制限中" : " · 今日の分で制限中");
 }
 
 function windowRow(label, autoW, manW, manSavedAt, autoAsOf, pacePct, isWeekly) {
@@ -347,7 +360,7 @@ function render() {
     node.querySelector(".plan").textContent = s.plan;
     const tr = todayRemain(auto.five_hour, man && man.five_hour, auto.weekly, man && man.weekly, manSavedAt, autoAsOf, auto.day_track);
     const rows = node.querySelector(".rows");
-    // 大きい「あと X%」
+    // 大きい「今日の残量 X%」
     const tb = document.createElement("div"); tb.className = "today-block";
     if (tr.unknown) {
       tb.innerHTML = '<div class="today-n na">不明</div><div class="today-l">今日の枠</div>';
@@ -497,7 +510,7 @@ function render() {
   gc.querySelector(".note").textContent = GROK_NOTE;
   wrap.appendChild(gc);
   const mm = document.createElement("div"); mm.className = "mmeta";
-  mm.innerHTML = '<span class="t" id="mtime"></span><button type="button" id="mtoggle"></button><button type="button" id="mreload" aria-label="再読み込み">↻</button>';
+  mm.innerHTML = '<span class="t" id="mtime"></span><a class="btn" href="help.html" title="計算の見方" style="padding:1px 5px;font-size:10px">?</a><button type="button" id="mtoggle"></button><button type="button" id="mreload" aria-label="再読み込み">↻</button>';
   strip.appendChild(mm);
   mm.querySelector("#mtoggle").addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
   mm.querySelector("#mreload").addEventListener("click", () => load());

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111318" media="(prefers-color-scheme: dark)">
+<title>AI使用量 — 計算の見方</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f5f7; --card: #ffffff; --text: #1b1d22; --muted: #6b7280; --line: #e5e7eb;
+    --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --accent: #2563eb; --code: #eef0f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111318; --card: #1b1e25; --text: #e8eaf0; --muted: #9aa1ae; --line: #2b2f39;
+      --ok: #22c55e; --warn: #f59e0b; --bad: #f87171; --accent: #60a5fa; --code: #2b2f39;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
+    font-size: 14px; line-height: 1.55;
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+  main { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 18px 0 6px; }
+  p, li { color: var(--text); }
+  .muted { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 10px 0; }
+  code, .f { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+  .ex { background: var(--code); border-radius: 8px; padding: 10px 12px; font-size: 13px; margin: 8px 0; }
+  .ex div { margin: 2px 0; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+  a { color: var(--accent); }
+  ul { padding-left: 1.2em; margin: 6px 0; }
+  .back { display: inline-block; margin-bottom: 10px; font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="./">← ダッシュボードへ</a>
+  <h1>計算の見方</h1>
+  <p class="muted">大きな数字は「今日の枠の残量%」です。推測値は入れず、取得できた値だけを使います。不明なときは「不明」と表示します。</p>
+
+  <div class="card">
+    <h2>週の始まりと「今日」の区切り</h2>
+    <ul>
+      <li>週の開始 = 週間枠の <code>resets_at − 7日</code>（サービスごとに違う）。</li>
+      <li>日境界 = 週開始から 24時間ごと（カレンダー日付ではなく、リセット時刻基準）。</li>
+      <li>日番号 <code>d</code> = <code>floor(経過時間 / 24h) + 1</code>（1〜7）。</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>日始まりの使用率の記録</h2>
+    <p>コレクターが <code>data/usage.json</code> の <code>day_track</code> に保存します。</p>
+    <ul>
+      <li><code>week_start</code> … その週の開始時刻</li>
+      <li><code>day_start_used[d]</code> … その日の境界直後の「週間使用%」</li>
+      <li>新しい日番号を初めて見たとき、境界直前に記録していた週間%をそのまま採用（使用量は取得トリガーの利用なしには増えないため正確）。</li>
+      <li>その週に境界前のスナップショットが無い場合、1日目は 0。それ以外は不明扱い。</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>今日の枠と残量%</h2>
+    <ul>
+      <li><code>todayQuota = d × 100/7 − dayStartUsed</code>（週全体に対する%、今日使える分）</li>
+      <li><code>todayUsed = weeklyUsed − dayStartUsed</code></li>
+      <li><code>remainPct = floor( max(0, (todayQuota − todayUsed) / todayQuota × 100) )</code></li>
+      <li><code>todayQuota ≤ 0</code> のときは赤で「今日の枠なし」</li>
+    </ul>
+    <p>サブテキスト例: 「今日使える分 23.6% のうち 4% 使用（週の枠全体に対する%）」</p>
+  </div>
+
+  <div class="card">
+    <h2>具体例</h2>
+    <div class="ex">
+      <div>週開始: 月曜 09:00、いま: 火曜 19:23 → d = 2</div>
+      <div>dayStartUsed = 5%、週間使用 = 9%</div>
+      <div>todayQuota = 2×100/7 − 5 ≈ <strong>23.6%</strong></div>
+      <div>todayUsed = 9 − 5 = <strong>4%</strong></div>
+      <div>remainPct = floor((23.6−4)/23.6×100) = <strong>83%</strong></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>5時間枠への自動切替</h2>
+    <p>5時間の残り%（週%と同じ単位で比較）が、今日の残り枠 <code>todayQuota − todayUsed</code> より小さいとき、大きな数字は5時間残量%になり、ラベルは「5時間枠で制限中」。そうでなければ「今日の分で制限中」。</p>
+    <p>ウィジェットの小さなタグ: <code>日</code> = 今日ペース、<code>5h</code> = 5時間枠。</p>
+  </div>
+
+  <div class="card">
+    <h2>色（残量の閾値・電池と同じ）</h2>
+    <ul>
+      <li><span class="swatch" style="background:var(--ok)"></span>緑 … 残量 ≥ 50%</li>
+      <li><span class="swatch" style="background:var(--warn)"></span>黄 … 20%〜50%</li>
+      <li><span class="swatch" style="background:var(--bad)"></span>赤 … 残量 &lt; 20%、または今日の枠なし</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>週間バーの線</h2>
+    <ul>
+      <li>細い目盛り … 週の 1/7〜6/7（日境界の目安）</li>
+      <li>太い白線 … 今日までの目標ペース <code>d × 100/7</code></li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>不明</h2>
+    <p>週間値・日始まり記録・5時間値が揃わないときは推測せず「不明」と表示します。</p>
+  </div>
+
+  <p class="muted"><a href="./">ダッシュボード</a> · このページに秘密情報はありません。</p>
+</main>
+</body>
+</html>
