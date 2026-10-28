@@ -201,7 +201,8 @@ const SERVICES = [
 ];
 const STALE_MIN = 30;
 // Codex の日割り（「今日使える分」）判定。false なら主表示は5h残り%のみ。戻すときは true に。
-const CODEX_DAILY_LIMIT_ENABLED = false;
+// この日時（Codex 週の上限リセット）以降は Codex を5時間枠のみ表示。それまでは元の判定。null/"" で無効。
+const CODEX_5H_ONLY_FROM = "2026-11-05T01:40:35+09:00";
 const ICONS = {
   claude: '<svg class="ico" viewBox="0 0 24 24" aria-label="Claude"><g stroke="#D97757" stroke-width="2.6" stroke-linecap="round">' +
     [0,30,60,90,120,150].map(a => '<line x1="12" y1="2.5" x2="12" y2="21.5" transform="rotate(' + a + ' 12 12)"/>').join("") + '</g></svg>',
@@ -258,7 +259,7 @@ function remColor(rem) {
 }
 
 function fiveHourOnly(fiveAuto, fiveMan, manSavedAt, autoAsOf) {
-  // 5h残り%だけ（日割りなし）。CODEX_DAILY_LIMIT_ENABLED=false のとき用。
+  // 5h残り%だけ（日割りなし）。CODEX_5H_ONLY_FROM 以降に使用。
   const fu = pick(num(fiveAuto && fiveAuto.used_percent), num(fiveMan && fiveMan.used_percent), manSavedAt, autoAsOf);
   const fr = pick(fiveAuto && fiveAuto.resets_at, fiveMan && fiveMan.resets_at, manSavedAt, autoAsOf);
   const fiveReset = toDate(fr.v);
@@ -379,7 +380,7 @@ function render() {
     node.querySelector(".plan").textContent = s.plan;
     const trDaily = todayRemain(auto.five_hour, man && man.five_hour, auto.weekly, man && man.weekly, manSavedAt, autoAsOf, auto.day_track);
     let tr;
-    const codexDailyOff = (s.key === "codex" && !CODEX_DAILY_LIMIT_ENABLED);
+    const codexDailyOff = (s.key === "codex" && !!CODEX_5H_ONLY_FROM && !isNaN(Date.parse(CODEX_5H_ONLY_FROM)) && Date.now() >= Date.parse(CODEX_5H_ONLY_FROM));
     if (codexDailyOff) {
       tr = fiveHourOnly(auto.five_hour, man && man.five_hour, manSavedAt, autoAsOf);
       if (!trDaily.unknown && trDaily.weekAllowed != null) tr.weekAllowed = trDaily.weekAllowed;
@@ -460,7 +461,7 @@ function render() {
     else if (codexDailyOff) {
       dl0.innerHTML = '<span class="k"></span>';
       const k = dl0.querySelector(".k");
-      k.textContent = "一時的に週の制限判定をオフ中。リセットしたら表示を元に戻す";
+      k.textContent = "週の上限リセット後のため、5時間枠のみ表示中";
       k.style.color = "var(--warn)";
     } else {
       dl0.innerHTML = '<span class="k"></span>';
@@ -529,7 +530,7 @@ function render() {
     }
     errEl.title = auto.error || "";
     if (codexDailyOff) {
-      node.querySelector(".note").textContent = "一時的に週の制限判定をオフ中。リセットしたら表示を元に戻す";
+      node.querySelector(".note").textContent = "週の上限リセット後のため、5時間枠のみ表示中";
     }
     node.querySelector(".official").href = s.url;
     node.querySelector(".official").title = s.name + " の公式使用量ページ";

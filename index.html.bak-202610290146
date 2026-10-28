@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111318" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="AI使用量">
+<title>AI使用量ダッシュボード</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f5f7; --card: #ffffff; --text: #1b1d22; --muted: #6b7280; --line: #e5e7eb;
+    --track: #e9ebef; --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --accent: #2563eb;
+    --manual: #7c3aed; --banner: #fff7ed; --banner-text: #9a3412;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111318; --card: #1b1e25; --text: #e8eaf0; --muted: #9aa1ae; --line: #2b2f39;
+      --track: #2b2f39; --ok: #22c55e; --warn: #f59e0b; --bad: #f87171; --accent: #60a5fa;
+      --manual: #a78bfa; --banner: #3a2410; --banner-text: #fdba74;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
+    font-size: 13px; line-height: 1.35; -webkit-text-size-adjust: 100%;
+    padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  }
+  main { max-width: 920px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 6px; margin: 0 2px 6px; flex-wrap: wrap; }
+  h1 { font-size: 15px; margin: 0; }
+  .meta { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .spacer { flex: 1; }
+  button, .btn {
+    font: inherit; font-size: 11px; border: 1px solid var(--line); background: var(--card); color: var(--text);
+    border-radius: 7px; padding: 3px 7px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 3px; white-space: nowrap;
+  }
+  button:active, .btn:active { opacity: .7; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .stale { background: var(--banner); color: var(--banner-text); border-radius: 6px; padding: 1px 6px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .stale[hidden] { display: none; }
+  #cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; min-width: 0; }
+  .card-head { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+  .card h2 { font-size: 14px; margin: 0; white-space: nowrap; }
+  .plan { color: var(--muted); font-size: 10px; white-space: nowrap; }
+  .row { padding: 5px 0; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .row-head { display: flex; justify-content: space-between; align-items: baseline; gap: 4px; }
+  .label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .pct { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pct small { font-size: 11px; font-weight: 600; }
+  .na { font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+  .bar { height: 5px; background: var(--track); border-radius: 999px; overflow: hidden; margin: 2px 0 3px; }
+  .bar > span { display: block; height: 100%; width: 0; border-radius: 999px; background: var(--ok); transition: width .4s; }
+  .bar.warn > span { background: var(--warn); } .bar.bad > span { background: var(--bad); }
+  .batt { position: relative; height: 26px; margin: 4px 7px 3px 0; border: 2px solid var(--muted); border-radius: 6px; padding: 2px; }
+  .batt::after { content: ""; position: absolute; right: -7px; top: 50%; transform: translateY(-50%); width: 4px; height: 45%; background: var(--muted); border-radius: 0 3px 3px 0; }
+  .batt .fill { height: 100%; width: 0; border-radius: 3px; background: var(--c, var(--track)); transition: width .4s; }
+  .batt .bt { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; text-shadow: 0 0 3px var(--card), 0 0 3px var(--card); }
+  .batt.na-ring { border-style: dashed; } .batt.na-ring .bt { font-size: 11px; color: var(--muted); }
+  @media (min-width: 700px) { .batt { height: 36px; } .batt .bt { font-size: 18px; } }
+  .row-head { justify-content: center; } .reset { text-align: center; }
+  .reset { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .countdown { font-weight: 600; color: var(--text); white-space: nowrap; }
+  .sub { color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .badge { display: inline-block; font-size: 9px; font-weight: 700; padding: 0 4px; border-radius: 5px; border: 1px solid var(--manual); color: var(--manual); margin-left: 3px; vertical-align: middle; }
+  .src { color: var(--muted); font-size: 10px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .note { color: var(--warn); font-size: 11px; font-weight: 600; margin-top: 3px; }
+  .err { color: var(--bad); font-size: 10px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .note:empty, .err:empty, .src:empty, .sub:empty { display: none; }
+  .actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text); padding: 12px; width: min(360px, 94vw); }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog h3 { font-size: 14px; margin: 0 0 6px; }
+  .form { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .form label { font-size: 11px; color: var(--muted); display: grid; gap: 2px; }
+  .form label.wide { grid-column: 1 / -1; }
+  .form input { font: inherit; font-size: 16px; padding: 5px 7px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); width: 100%; min-width: 0; }
+  .hint { font-size: 11px; color: var(--muted); margin: 0 0 6px; }
+  dialog .actions button { font-size: 13px; padding: 5px 10px; }
+  @media (max-width: 699px) { .reset { white-space: normal; } }
+  @media (min-width: 700px) {
+    body { font-size: 14px; padding: 12px; }
+    h1 { font-size: 17px; } .meta, .stale { font-size: 12px; }
+    #cards { gap: 12px; } .card { padding: 12px 14px; }
+    .card h2 { font-size: 16px; } .plan { font-size: 12px; }
+    .row { padding: 8px 0; } .label { font-size: 13px; } .pct { font-size: 28px; } .pct small { font-size: 13px; }
+    .today-n { font-size: 36px; } .today-l { font-size: 12px; }
+    .na { font-size: 14px; } .bar { height: 7px; margin: 4px 0 4px; } .reset { font-size: 13px; }
+    .sub, .src, .err { font-size: 11px; } .note { font-size: 12px; } button, .btn { font-size: 12px; padding: 4px 9px; }
+  }
+
+  .today-block { text-align: center; padding: 4px 0 6px; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
+  .today-n { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .today-n.na { font-size: 18px; color: var(--muted); font-weight: 700; }
+  .today-l { font-size: 10px; color: var(--muted); margin-top: 1px; }
+  .day-tick { position: absolute; top: 22%; bottom: 22%; width: 1px; background: var(--muted); opacity: .35; z-index: 1; pointer-events: none; transform: translateX(-50%); }
+  .batt .day-tick { top: 20%; bottom: 20%; }
+  .pace-mark { position: absolute; top: -1px; bottom: -1px; width: 2px; background: #fff; opacity: .95; z-index: 2; pointer-events: none; transform: translateX(-50%); box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
+  .batt .pace-mark { top: 0; bottom: 0; }
+  /* compact view */
+  .ico { width: 16px; height: 16px; flex: none; display: block; }
+  #strip { display: inline-flex; max-width: 100%; flex-wrap: wrap; align-items: center; gap: 3px 8px; background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 4px 6px; }
+  .mg { display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
+  .mg.has-today { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .mg + .mg { border-left: 1px solid var(--line); padding-left: 8px; }
+  .mg-top { display: flex; align-items: center; gap: 4px; }
+  .mg-today .today-n { font-size: 18px; }
+  .mg-today .today-n.na { font-size: 12px; }
+  .mg-today .today-l { font-size: 9px; }
+  .mg-bars { display: flex; align-items: center; gap: 3px; }
+  .wl { font-size: 10px; color: var(--muted); font-weight: 600; margin-left: 2px; }
+  .mb { position: relative; width: 26px; height: 12px; border: 1.5px solid var(--muted); border-radius: 3px; padding: 1px; margin-right: 3px; }
+  .mb::after { content: ""; position: absolute; right: -4px; top: 3px; width: 2px; height: 4px; background: var(--muted); border-radius: 0 1px 1px 0; }
+  .mb .fill { height: 100%; border-radius: 1px; background: var(--c, var(--track)); }
+  .mb.na-ring { border-style: dashed; }
+  .mp { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 2.6em; }
+  .mp.na { font-size: 9px; color: var(--muted); font-weight: 600; }
+  .mmeta { margin-left: auto; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .mmeta .t { font-size: 10px; color: var(--muted); }
+  .mmeta button { font-size: 10px; padding: 1px 5px; }
+  #det { display: none; width: fit-content; max-width: 100%; margin-top: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 4px 7px; font-size: 11px; line-height: 1.45; }
+  body.expanded #det { display: block; }
+  .dsv { display: flex; gap: 5px; align-items: flex-start; } .dsv + .dsv { border-top: 1px solid var(--line); margin-top: 3px; padding-top: 3px; }
+  .dsv .ico { margin-top: 1px; } .dsv > div { min-width: 0; flex: 1; }
+  .dl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+  .dl .k { color: var(--muted); font-weight: 600; } .dl.sub2 { color: var(--muted); font-size: 10px; }
+  .dl .old { color: var(--warn); font-weight: 700; } .dl a, .dl .lnk { color: var(--accent); background: none; border: 0; padding: 0; font-size: 10px; cursor: pointer; text-decoration: underline; }
+  #cards, header { display: none; }
+  @media (min-width: 700px) and (min-height: 500px) {
+    #strip, #det { display: none !important; } #cards { display: grid !important; } header { display: flex !important; }
+    h1 { font-size: 17px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>AI使用量</h1>
+    <span class="meta" id="fetched" title="自動取得: PCで Claude Code / Codex を使ったときに更新（最短10分間隔）">読み込み中…</span>
+    <span class="stale" id="stale" hidden></span>
+    <span class="spacer"></span>
+    <a class="btn" href="help.html" title="計算の見方">?</a>
+    <button id="reload" type="button" aria-label="再読み込み">↻</button>
+  </header>
+  <div id="strip"></div>
+  <div id="det"></div>
+  <div id="cards"></div>
+</main>
+
+<template id="card-tpl">
+  <section class="card">
+    <div class="card-head"><h2 class="name"></h2><span class="plan"></span></div>
+    <div class="rows"></div>
+    <div class="note"></div>
+    <div class="err"></div>
+    <div class="src"></div>
+    <div class="actions">
+      <a class="btn primary official" target="_blank" rel="noopener">公式 ↗</a>
+      <button type="button" class="open-manual">✎ 手入力</button>
+    </div>
+  </section>
+</template>
+
+<dialog id="manual">
+  <form method="dialog" id="manual-form">
+    <h3 id="manual-title"></h3>
+    <p class="hint">公式ページ等で確認した値を入力。自動取得値より新しい手入力値があればそちらを表示します（この端末のブラウザにだけ保存）。空欄は未入力。</p>
+    <div class="form">
+      <label>5時間枠 (%) <input type="number" inputmode="decimal" min="0" max="100" step="0.1" data-k="five_hour.used_percent"></label>
+      <label>週間枠 (%) <input type="number" inputmode="decimal" min="0" max="100" step="0.1" data-k="weekly.used_percent"></label>
+      <label class="wide">5時間枠 リセット日時 <input type="datetime-local" data-k="five_hour.resets_at"></label>
+      <label class="wide">週間枠 リセット日時 <input type="datetime-local" data-k="weekly.resets_at"></label>
+      <label class="wide"><span class="rc-label">リセット回数</span> <input type="number" inputmode="numeric" min="0" step="1" data-k="reset_count"></label>
+    </div>
+    <p class="hint saved-at" style="margin-top:6px"></p>
+    <div class="actions">
+      <button type="button" class="save primary btn">保存</button>
+      <button type="button" class="clear">消去</button>
+      <button type="button" class="close">閉じる</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+"use strict";
+const SERVICES = [
+  { key: "claude", name: "Claude Code", plan: "Claude Pro", url: "https://claude.ai/settings/usage",
+    rcNote: "手入力のみ" },
+  { key: "codex", name: "Codex", plan: "ChatGPT Plus", url: "https://chatgpt.com/codex/settings/usage", rcNote: "" },
+];
+const STALE_MIN = 30;
+// Codex の日割り（「今日使える分」）判定。false なら主表示は5h残り%のみ。戻すときは true に。
+const CODEX_DAILY_LIMIT_ENABLED = false;
+const ICONS = {
+  claude: '<svg class="ico" viewBox="0 0 24 24" aria-label="Claude"><g stroke="#D97757" stroke-width="2.6" stroke-linecap="round">' +
+    [0,30,60,90,120,150].map(a => '<line x1="12" y1="2.5" x2="12" y2="21.5" transform="rotate(' + a + ' 12 12)"/>').join("") + '</g></svg>',
+  codex: '<svg class="ico" viewBox="0 0 24 24" aria-label="Codex"><rect x="1" y="1" width="22" height="22" rx="6" fill="#111"/><path d="M6.5 8l4 4-4 4" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12.5" y1="16.5" x2="17.5" y2="16.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  grok: '<svg class="ico" viewBox="0 0 24 24" aria-label="Grok Bot"><rect x="1" y="1" width="22" height="22" rx="6" fill="#111"/><path d="M7 17L17 7M9.5 7.5h-2v2M14.5 16.5h2v-2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+const GROK_NOTE = "自動取得できません（公式APIなし）。Grok Bot アプリの設定「Usage & Billing」で確認してください（表示されないアカウントもあります）。";
+const NA = "取得できません";
+const LS_KEY = (k) => "aiusage.manual." + k;
+let DATA = null;
+
+const fmtDate = new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" });
+const fmt = (d) => d ? fmtDate.format(d) : NA;
+const toDate = (v) => { if (!v) return null; const d = new Date(v); return isNaN(d) ? null : d; };
+const num = (v) => (v === null || v === undefined || v === "" || isNaN(Number(v))) ? null : Number(v);
+
+function countdown(d) {
+  if (!d) return "";
+  let s = Math.floor((d - Date.now()) / 1000);
+  if (s <= 0) return "リセット済み";
+  const day = Math.floor(s / 86400); s -= day * 86400;
+  const h = Math.floor(s / 3600); s -= h * 3600;
+  const m = Math.floor(s / 60);
+  return "あと" + (day ? day + "日" : "") + (day || h ? h + "時間" : "") + m + "分";
+}
+function ago(d) {
+  const m = Math.floor((Date.now() - d) / 60000);
+  if (m < 1) return "1分以内";
+  if (m < 60) return m + "分前";
+  const h = Math.floor(m / 60);
+  return h < 48 ? h + "時間" + (m % 60) + "分前" : Math.floor(h / 24) + "日前";
+}
+function loadManual(k) { try { return JSON.parse(localStorage.getItem(LS_KEY(k)) || "null"); } catch { return null; } }
+function saveManual(k, v) { if (v) localStorage.setItem(LS_KEY(k), JSON.stringify(v)); else localStorage.removeItem(LS_KEY(k)); }
+function getPath(o, p) { return p.split(".").reduce((a, k) => (a == null ? undefined : a[k]), o); }
+function setPath(o, p, v) { const ks = p.split("."); let a = o; ks.slice(0, -1).forEach(k => { a[k] = a[k] || {}; a = a[k]; }); a[ks[ks.length - 1]] = v; }
+function toLocalInput(v) { const d = toDate(v); if (!d) return ""; const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 16); }
+
+// 表示値を決める: 手入力値が自動取得値より新しい（または自動取得値が無い）場合は手入力値
+function pick(auto, man, manSavedAt, autoAsOf) {
+  const autoOk = auto !== null && auto !== undefined;
+  const manOk = man !== null && man !== undefined && man !== "";
+  if (manOk && (!autoOk || !autoAsOf || (manSavedAt && manSavedAt > autoAsOf))) return { v: man, manual: true };
+  if (autoOk) return { v: auto, manual: false };
+  return { v: null, manual: false };
+}
+
+// 今日の枠の残量%（day_track.day_start_used 必須。推測しない）
+function remColor(rem) {
+  if (rem === null || rem === undefined) return "var(--muted)";
+  if (rem >= 50) return "var(--ok)";
+  if (rem >= 20) return "var(--warn)";
+  return "var(--bad)";
+}
+
+function fiveHourOnly(fiveAuto, fiveMan, manSavedAt, autoAsOf) {
+  // 5h残り%だけ（日割りなし）。CODEX_DAILY_LIMIT_ENABLED=false のとき用。
+  const fu = pick(num(fiveAuto && fiveAuto.used_percent), num(fiveMan && fiveMan.used_percent), manSavedAt, autoAsOf);
+  const fr = pick(fiveAuto && fiveAuto.resets_at, fiveMan && fiveMan.resets_at, manSavedAt, autoAsOf);
+  const fiveReset = toDate(fr.v);
+  let fiveRemain = null;
+  if (fiveReset && fiveReset.getTime() < Date.now()) fiveRemain = 100;
+  else if (fu.v !== null) fiveRemain = 100 - fu.v;
+  if (fiveRemain === null) return { unknown: true, dailyDisabled: true };
+  const shown = Math.max(0, Math.floor(fiveRemain));
+  return {
+    unknown: false, noQuota: false, shown,
+    label: "5h", color: remColor(fiveRemain),
+    fiveLimited: true, fiveRemain, dailyDisabled: true
+  };
+}
+function todayRemain(fiveAuto, fiveMan, weekAuto, weekMan, manSavedAt, autoAsOf, dayTrack) {
+  const wu = pick(num(weekAuto && weekAuto.used_percent), num(weekMan && weekMan.used_percent), manSavedAt, autoAsOf);
+  const wr = pick(weekAuto && weekAuto.resets_at, weekMan && weekMan.resets_at, manSavedAt, autoAsOf);
+  const fu = pick(num(fiveAuto && fiveAuto.used_percent), num(fiveMan && fiveMan.used_percent), manSavedAt, autoAsOf);
+  const fr = pick(fiveAuto && fiveAuto.resets_at, fiveMan && fiveMan.resets_at, manSavedAt, autoAsOf);
+  const weekReset = toDate(wr.v);
+  if (wu.v === null || !weekReset) return { unknown: true };
+  const track = dayTrack || {};
+  const wsRec = toDate(track.week_start);
+  const start = wsRec ? wsRec.getTime() : (weekReset.getTime() - 7 * 86400000);
+  let d = Math.floor((Date.now() - start) / 86400000) + 1;
+  if (d < 1) d = 1; if (d > 7) d = 7;
+  const weekAllowed = d * 100 / 7;
+  const map = track.day_start_used || {};
+  const raw = (String(d) in map) ? map[String(d)] : map[d];
+  if (raw === undefined || raw === null) return { unknown: true };
+  const dsu = num(raw);
+  if (dsu === null) return { unknown: true };
+  const todayQuota = weekAllowed - dsu;
+  const todayUsed = wu.v - dsu;
+  const fiveReset = toDate(fr.v);
+  let fiveRemain = null, fiveUsed = null;
+  if (fiveReset && fiveReset.getTime() < Date.now()) { fiveRemain = 100; fiveUsed = 0; }
+  else if (fu.v !== null) { fiveUsed = fu.v; fiveRemain = 100 - fu.v; }
+  if (fiveRemain === null) return { unknown: true };
+  if (todayQuota <= 0) {
+    return { unknown: false, noQuota: true, shown: null, label: "今日の枠なし", color: "var(--bad)",
+             weekAllowed, todayQuota, todayUsed, fiveLimited: false };
+  }
+  const remainToday = todayQuota - todayUsed;
+  const remainPct = Math.max(0, (remainToday / todayQuota) * 100);
+  const fiveLimited = fiveRemain < remainToday;
+  let shown, label, remForColor;
+  if (fiveLimited) {
+    shown = Math.max(0, Math.floor(fiveRemain));
+    label = "5時間枠で制限中";
+    remForColor = fiveRemain;
+  } else {
+    shown = Math.max(0, Math.floor(remainPct));
+    label = "今日の分で制限中";
+    remForColor = remainPct;
+  }
+  return { unknown: false, noQuota: false, shown, label, color: remColor(remForColor),
+           weekAllowed, todayQuota, todayUsed, fiveLimited, remainPct, fiveRemain };
+}
+function todayLine(tr) {
+  if (tr.unknown) return "今日の枠 不明";
+  if (tr.noQuota) return "今日の枠なし";
+  const tq = tr.todayQuota, tu = Math.max(0, tr.todayUsed);
+  const tqS = (Math.round(tq * 10) / 10).toString();
+  const tuS = (Math.round(tu * 10) / 10).toString();
+  const base = "今日使える分 " + tqS + "% のうち " + tuS + "% 使用（週の枠全体に対する%）";
+  return base + (tr.fiveLimited ? " · 5時間枠で制限中" : " · 今日の分で制限中");
+}
+
+function windowRow(label, autoW, manW, manSavedAt, autoAsOf, pacePct, isWeekly) {
+  const p = pick(num(autoW && autoW.used_percent), num(manW && manW.used_percent), manSavedAt, autoAsOf);
+  const r = pick(autoW && autoW.resets_at, manW && manW.resets_at, manSavedAt, autoAsOf);
+  const row = document.createElement("div"); row.className = "row";
+  const used = p.v;
+  const rem = used === null ? null : Math.min(100, Math.max(0, 100 - used));
+  const color = rem === null ? "var(--track)" : rem >= 50 ? "#3b82f6" : rem >= 20 ? "#eab308" : "#ef4444";
+  const d = toDate(r.v);
+  row.innerHTML =
+    '<div class="row-head"><span class="label"></span><span class="val"></span></div>' +
+    '<div class="batt"><div class="fill"></div><div class="bt"></div></div>' +
+    '<div class="reset">↻ <span class="rt"></span> <span class="countdown" data-t=""></span></div>';
+  row.querySelector(".label").textContent = label;
+  const dn = row.querySelector(".batt"), dv = row.querySelector(".bt");
+  dn.style.setProperty("--c", color);
+  dn.querySelector(".fill").style.width = (rem === null ? 0 : rem) + "%";
+  if (isWeekly) {
+    for (let _di = 1; _di <= 6; _di++) { const _t = document.createElement("div"); _t.className = "day-tick"; _t.style.left = (_di * 100 / 7) + "%"; dn.appendChild(_t); }
+  }
+  if (pacePct != null && !isNaN(pacePct)) {
+    const mark = document.createElement("div"); mark.className = "pace-mark";
+    mark.style.left = Math.min(100, Math.max(0, pacePct)) + "%";
+    mark.title = "今日の目標ペース " + (Math.round(pacePct * 10) / 10) + "%";
+    dn.appendChild(mark);
+  }
+  if (rem === null) { dn.classList.add("na-ring"); dv.textContent = "取得なし"; }
+  else { dv.textContent = "残り " + (Math.round(rem * 10) / 10) + "%"; }
+  if (p.manual) row.querySelector(".val").insertAdjacentHTML("beforeend", '<span class="badge">手入力</span>');
+  row.querySelector(".rt").textContent = fmt(d);
+  if (r.manual && d) row.querySelector(".rt").insertAdjacentHTML("afterend", '<span class="badge">手入力</span>');
+  const cd = row.querySelector(".countdown");
+  if (d) { cd.dataset.t = d.toISOString(); cd.textContent = countdown(d); }
+  return row;
+}
+
+function render() {
+  const wrap = document.getElementById("cards");
+  wrap.textContent = "";
+  const tpl = document.getElementById("card-tpl");
+  const strip = document.getElementById("strip"); strip.textContent = "";
+  const det = document.getElementById("det"); det.textContent = "";
+  SERVICES.forEach(s => {
+    const node = tpl.content.firstElementChild.cloneNode(true);
+    const auto = (DATA && DATA.services && DATA.services[s.key]) || {};
+    const man = loadManual(s.key);
+    const manSavedAt = man && man.saved_at ? new Date(man.saved_at) : null;
+    const autoAsOf = toDate(auto.as_of) || toDate(DATA && DATA.fetched_at);
+    node.querySelector(".name").textContent = s.name;
+    node.querySelector(".plan").textContent = s.plan;
+    const trDaily = todayRemain(auto.five_hour, man && man.five_hour, auto.weekly, man && man.weekly, manSavedAt, autoAsOf, auto.day_track);
+    let tr;
+    const codexDailyOff = (s.key === "codex" && !CODEX_DAILY_LIMIT_ENABLED);
+    if (codexDailyOff) {
+      tr = fiveHourOnly(auto.five_hour, man && man.five_hour, manSavedAt, autoAsOf);
+      if (!trDaily.unknown && trDaily.weekAllowed != null) tr.weekAllowed = trDaily.weekAllowed;
+    } else {
+      tr = trDaily;
+    }
+    const rows = node.querySelector(".rows");
+    // 大きい「今日の残量 X%」（Codex日割りオフ時は5h残り%）
+    const tb = document.createElement("div"); tb.className = "today-block";
+    if (tr.unknown) {
+      tb.innerHTML = '<div class="today-n na">不明</div><div class="today-l">今日の枠</div>';
+    } else if (tr.noQuota) {
+      tb.innerHTML = '<div class="today-n"></div><div class="today-l"></div>';
+      const tn = tb.querySelector(".today-n");
+      tn.textContent = "枠なし"; tn.style.color = tr.color;
+      tb.querySelector(".today-l").textContent = tr.label;
+    } else if (codexDailyOff) {
+      tb.innerHTML = '<div class="today-n"></div><div class="today-l"></div>';
+      const tn = tb.querySelector(".today-n");
+      tn.textContent = tr.shown + "%";
+      tn.style.color = tr.color;
+      tb.querySelector(".today-l").textContent = "5h";
+    } else {
+      tb.innerHTML = '<div class="today-n"></div><div class="today-l"></div>';
+      const tn = tb.querySelector(".today-n");
+      tn.textContent = tr.shown + "%";
+      tn.style.color = tr.color;
+      tb.querySelector(".today-l").textContent = todayLine(tr);
+    }
+    rows.appendChild(tb);
+    const wins = [];
+    [["5h", "5時間枠", "five_hour", null], ["1w", "週間枠", "weekly", (tr.weekAllowed != null ? tr.weekAllowed : null)]].forEach(([sl, ll, k, pace]) => {
+      const r1 = windowRow(ll, auto[k], man && man[k], manSavedAt, autoAsOf, pace, k === "weekly");
+      rows.appendChild(r1);
+      wins.push({ sl, row: r1, pace });
+    });
+
+    // リセット回数
+    const rc = pick(num(auto.reset_count), num(man && man.reset_count), manSavedAt, autoAsOf);
+    const rr = document.createElement("div"); rr.className = "row";
+    rr.innerHTML = '<div class="row-head"><span class="label">リセット回数</span><span class="val"></span></div><div class="sub"></div>';
+    const v = rr.querySelector(".val");
+    if (rc.v === null) { v.innerHTML = '<span class="na"></span>'; v.firstChild.textContent = NA; }
+    else { v.innerHTML = '<span class="pct"></span>'; v.firstChild.innerHTML = rc.v + "<small> 回</small>"; }
+    if (rc.manual) v.insertAdjacentHTML("beforeend", '<span class="badge">手入力</span>');
+    const subs = [];
+    if (!rc.manual && auto.reset_count_expires_at) subs.push("期限 " + fmt(toDate(auto.reset_count_expires_at)));
+    if (s.rcNote) subs.push(s.rcNote);
+    rr.querySelector(".sub").textContent = subs.join(" ／ ");
+    rows.appendChild(rr);
+    // compact strip + terse details
+    const g = document.createElement("div"); g.className = "mg has-today"; g.title = s.name + "（タップで詳細）";
+    const gTop = document.createElement("div"); gTop.className = "mg-top";
+    gTop.innerHTML = ICONS[s.key];
+    const gToday = document.createElement("div"); gToday.className = "mg-today";
+    if (tr.unknown) {
+      gToday.innerHTML = '<div class="today-n na">不明</div><div class="today-l">今日の枠</div>';
+    } else if (tr.noQuota) {
+      gToday.innerHTML = '<div class="today-n"></div><div class="today-l"></div>';
+      const tn = gToday.querySelector(".today-n");
+      tn.textContent = "枠なし"; tn.style.color = tr.color;
+      gToday.querySelector(".today-l").textContent = "今日の枠なし";
+    } else {
+      gToday.innerHTML = '<div class="today-n"></div><div class="today-l"></div>';
+      const tn = gToday.querySelector(".today-n");
+      tn.textContent = tr.shown + "%";
+      tn.style.color = tr.color;
+      gToday.querySelector(".today-l").textContent = codexDailyOff ? "5h" : tr.label;
+    }
+    gTop.appendChild(gToday);
+    g.appendChild(gTop);
+    const gBars = document.createElement("div"); gBars.className = "mg-bars";
+    const dv = document.createElement("div"); dv.className = "dsv"; dv.innerHTML = ICONS[s.key] + "<div></div>";
+    const dbox = dv.lastChild;
+    // detail: big number first
+    const dl0 = document.createElement("div"); dl0.className = "dl";
+    if (tr.unknown) dl0.innerHTML = '<span class="k">今日の枠 不明</span>';
+    else if (codexDailyOff) {
+      dl0.innerHTML = '<span class="k"></span>';
+      const k = dl0.querySelector(".k");
+      k.textContent = "一時的に週の制限判定をオフ中。リセットしたら表示を元に戻す";
+      k.style.color = "var(--warn)";
+    } else {
+      dl0.innerHTML = '<span class="k"></span>';
+      const k = dl0.querySelector(".k");
+      k.textContent = todayLine(tr);
+      k.style.color = tr.color;
+    }
+    dbox.appendChild(dl0);
+    wins.forEach(({ sl, row, pace }) => {
+      const src = row.querySelector(".batt"), t = src.querySelector(".bt").textContent, na = !t.startsWith("残り");
+      const mb = document.createElement("span"); mb.className = "mb" + (na ? " na-ring" : "");
+      mb.style.setProperty("--c", src.style.getPropertyValue("--c"));
+      mb.innerHTML = '<div class="fill"></div>'; mb.firstChild.style.width = src.querySelector(".fill").style.width;
+      if (sl === "1w") {
+        for (let _di = 1; _di <= 6; _di++) { const _t = document.createElement("div"); _t.className = "day-tick"; _t.style.left = (_di * 100 / 7) + "%"; mb.appendChild(_t); }
+      }
+      if (pace != null && !isNaN(pace)) {
+        const mark = document.createElement("div"); mark.className = "pace-mark";
+        mark.style.left = Math.min(100, Math.max(0, pace)) + "%";
+        mb.appendChild(mark);
+      }
+      const wl = document.createElement("span"); wl.className = "wl"; wl.textContent = sl;
+      const mp = document.createElement("span"); mp.className = "mp" + (na ? " na" : ""); mp.textContent = na ? "取得なし" : t.replace("残り ", "");
+      gBars.append(wl, mb, mp);
+      const cd = row.querySelector(".countdown");
+      const l = document.createElement("div"); l.className = "dl";
+      l.innerHTML = '<span class="k"></span> ↻ <span class="rt"></span> <span class="countdown"></span>';
+      l.querySelector(".k").textContent = sl + " " + (na ? "取得なし" : t.replace("残り ", ""));
+      l.querySelector(".rt").textContent = row.querySelector(".rt").textContent;
+      const c2 = l.querySelector(".countdown"); if (cd.dataset.t) { c2.dataset.t = cd.dataset.t; c2.textContent = cd.textContent; }
+      dbox.appendChild(l);
+    });
+    g.appendChild(gBars);
+    g.addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
+    strip.appendChild(g);
+    const l3 = document.createElement("div"); l3.className = "dl sub2";
+    const a3 = toDate(auto.as_of);
+    const parts = [];
+    if (a3) parts.push("値 " + fmt(a3) + "（" + ago(a3) + "）");
+    else parts.push("値の時点 不明");
+    parts.push("リセット回数 " + (rc.v === null ? "取得なし" : rc.v + "回"));
+    l3.textContent = parts.join(" · ") + " · ";
+    if (a3 && (Date.now() - a3) / 3600000 > 6) { const o = document.createElement("span"); o.className = "old"; o.textContent = "古い値 · "; l3.prepend(o); }
+    if (auto.error) { const e = document.createElement("span"); e.className = "old"; e.textContent = "⚠ "; e.title = auto.error; l3.prepend(e); }
+    const lk = document.createElement("a"); lk.href = s.url; lk.target = "_blank"; lk.rel = "noopener"; lk.textContent = "公式";
+    const mi = document.createElement("button"); mi.type = "button"; mi.className = "lnk"; mi.textContent = "手入力"; mi.addEventListener("click", () => openManual(s));
+    l3.append(lk, " ", mi);
+    dbox.appendChild(l3);
+    det.appendChild(dv);
+
+    const src = [];
+    if (auto.as_of) { const a = toDate(auto.as_of); if (a) src.push("値の時点 " + fmt(a) + "（" + ago(a) + "）"); }
+    if (manSavedAt) src.push("手入力 " + fmt(manSavedAt));
+    const srcEl = node.querySelector(".src");
+    srcEl.textContent = src.join(" ／ ");
+    srcEl.title = (auto.source ? "取得元: " + auto.source + "\n" : "") + src.join("\n");
+    const noAuto = auto.five_hour == null || (num(auto.five_hour.used_percent) === null && num(auto.weekly && auto.weekly.used_percent) === null);
+    const errEl = node.querySelector(".err");
+    const asOfD = toDate(auto.as_of);
+    if (!noAuto && asOfD && (Date.now() - asOfD) / 3600000 > 6) node.querySelector(".note").textContent = "古い値（" + fmt(asOfD) + " 時点）";
+    if (s.key === "claude" && noAuto) {
+      node.querySelector(".note").textContent = man ? "自動取得不可・手入力値を表示" : "自動取得不可・手入力で表示";
+      errEl.textContent = "";
+    } else {
+      errEl.textContent = auto.error ? "⚠ " + auto.error : "";
+    }
+    errEl.title = auto.error || "";
+    if (codexDailyOff) {
+      node.querySelector(".note").textContent = "一時的に週の制限判定をオフ中。リセットしたら表示を元に戻す";
+    }
+    node.querySelector(".official").href = s.url;
+    node.querySelector(".official").title = s.name + " の公式使用量ページ";
+    node.querySelector(".open-manual").addEventListener("click", () => openManual(s));
+    if (man) node.querySelector(".open-manual").insertAdjacentHTML("beforeend", '<span class="badge">保存済</span>');
+    wrap.appendChild(node);
+  });
+  // Grok Bot: 自動取得不可のため常に「不明」（推測値は入れない）
+  const gg = document.createElement("div"); gg.className = "mg"; gg.title = "Grok Bot（タップで詳細）";
+  gg.innerHTML = ICONS.grok + '<span class="wl">週</span><span class="mb na-ring"><div class="fill" style="width:0"></div></span><span class="mp na">不明</span>';
+  gg.addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
+  strip.appendChild(gg);
+  const gd = document.createElement("div"); gd.className = "dsv";
+  gd.innerHTML = ICONS.grok + '<div><div class="dl"><span class="k">Grok Bot 週 不明</span></div><div class="sub2" style="font-size:10px;color:var(--muted)"></div></div>';
+  gd.querySelector(".sub2").textContent = GROK_NOTE;
+  det.appendChild(gd);
+  const gc = document.createElement("section"); gc.className = "card";
+  gc.innerHTML = '<div class="card-head"><h2 class="name">Grok Bot</h2><span class="plan"></span></div><div class="rows"><div class="row"><div class="row-head"><span class="label">週間枠</span><span class="val"><span class="na">不明</span></span></div></div></div><div class="note"></div>';
+  gc.querySelector(".note").textContent = GROK_NOTE;
+  wrap.appendChild(gc);
+  const mm = document.createElement("div"); mm.className = "mmeta";
+  mm.innerHTML = '<span class="t" id="mtime"></span><a class="btn" href="help.html" title="計算の見方" style="padding:1px 5px;font-size:10px">?</a><button type="button" id="mtoggle"></button><button type="button" id="mreload" aria-label="再読み込み">↻</button>';
+  strip.appendChild(mm);
+  mm.querySelector("#mtoggle").addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
+  mm.querySelector("#mreload").addEventListener("click", () => load());
+  setExpanded(document.body.classList.contains("expanded"), true);
+  updateMeta();
+}
+
+const dlg = document.getElementById("manual");
+let CUR = null;
+function openManual(s) {
+  CUR = s;
+  const man = loadManual(s.key);
+  const manSavedAt = man && man.saved_at ? new Date(man.saved_at) : null;
+  document.getElementById("manual-title").textContent = s.name + " 手入力";
+  dlg.querySelectorAll("input[data-k]").forEach(inp => {
+    const val = man ? getPath(man, inp.dataset.k) : null;
+    inp.value = val == null ? "" : (inp.type === "datetime-local" ? toLocalInput(val) : val);
+  });
+  dlg.querySelector(".rc-label").textContent = s.key === "claude" ? "リセット回数（Claude は手入力のみ）" : "リセット回数";
+  dlg.querySelector(".saved-at").textContent = manSavedAt ? "保存日時: " + fmt(manSavedAt) : "未保存";
+  if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
+}
+function closeManual() { if (dlg.close) dlg.close(); else dlg.removeAttribute("open"); }
+dlg.querySelector(".close").addEventListener("click", closeManual);
+dlg.querySelector(".save").addEventListener("click", () => {
+  if (!CUR) return;
+  const o = {}; let any = false;
+  dlg.querySelectorAll("input[data-k]").forEach(inp => {
+    if (inp.value === "") return;
+    let val = inp.value;
+    if (inp.type === "datetime-local") { const d = new Date(val); if (isNaN(d)) return; val = d.toISOString(); }
+    else { val = Number(val); if (isNaN(val)) return; }
+    setPath(o, inp.dataset.k, val); any = true;
+  });
+  if (any) o.saved_at = new Date().toISOString();
+  saveManual(CUR.key, any ? o : null);
+  closeManual(); render();
+});
+dlg.querySelector(".clear").addEventListener("click", () => {
+  if (CUR && confirm(CUR.name + " の手入力値を消去しますか？")) { saveManual(CUR.key, null); closeManual(); render(); }
+});
+
+function updateMeta() {
+  const el = document.getElementById("fetched");
+  const badge = document.getElementById("stale");
+  const f = DATA && toDate(DATA.fetched_at);
+  if (!f) {
+    el.textContent = "最終取得: " + NA;
+    badge.hidden = false; badge.textContent = "⚠ データ読込失敗";
+    badge.title = "data/usage.json を読み込めませんでした。";
+    return;
+  }
+  el.textContent = fmt(f) + "（" + ago(f) + "）"; el.title = "最終取得 " + fmt(f);
+  const mt = document.getElementById("mtime"); if (mt) { mt.textContent = fmt(f).replace(/^.*?\) ?/, "") + ((Date.now() - f) / 60000 > STALE_MIN ? " ⚠" : ""); mt.title = "最終取得 " + fmt(f) + "（" + ago(f) + "）"; }
+  badge.hidden = (Date.now() - f) / 60000 <= STALE_MIN;
+  badge.textContent = "⚠ 古い";
+  badge.title = ago(f) + "に取得。更新は PC で Claude Code / Codex を使ったときだけ行われます（スマホでの利用分は未反映の可能性）。";
+}
+
+let BASE_H = null;
+function setExpanded(on, quiet) {
+  document.body.classList.toggle("expanded", on);
+  const t = document.getElementById("mtoggle"); if (t) { t.textContent = on ? "詳細 ▲" : "詳細 ▼"; t.setAttribute("aria-expanded", on); }
+  if (quiet) return;
+  // Edge/Chrome の --app ウィンドウでは内容に合わせて高さを変える（スマホでは無視される）
+  try {
+    if (window.innerWidth < 700 && !/Mobi|Android|iPhone/.test(navigator.userAgent)) {
+      const chrome = window.outerHeight - window.innerHeight;
+      requestAnimationFrame(() => {
+        const need = Math.ceil(document.querySelector("main").getBoundingClientRect().bottom + 10);
+        if (on) { if (BASE_H === null) BASE_H = window.outerHeight; if (need > window.innerHeight) window.resizeTo(window.outerWidth, need + chrome); }
+        else if (BASE_H !== null) { window.resizeTo(window.outerWidth, BASE_H); BASE_H = null; }
+      });
+    }
+  } catch (e) {}
+}
+
+function tick() {
+  document.querySelectorAll(".countdown[data-t]").forEach(el => {
+    if (el.dataset.t) el.textContent = countdown(new Date(el.dataset.t));
+  });
+  updateMeta();
+}
+
+async function load() {
+  try {
+    const res = await fetch("data/usage.json?ts=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    DATA = await res.json();
+  } catch (e) {
+    console.warn(e);
+    if (!DATA) DATA = null;
+  }
+  render();
+}
+
+document.getElementById("reload").addEventListener("click", load);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+if (location.hash === "#detail") document.body.classList.add("expanded");
+setInterval(tick, 15000);
+setInterval(load, 5 * 60000);
+load();
+</script>
+</body>
+</html>
