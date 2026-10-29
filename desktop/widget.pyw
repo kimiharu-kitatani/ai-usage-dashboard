@@ -410,6 +410,11 @@ class W:
                 c.create_rectangle(bx, cy - bh/2, bx+bw, cy+bh/2, outline=DM, dash=(2,2) if rem is None else None)
                 if rem is not None and rem > 0:
                     c.create_rectangle(bx+1, cy-bh/2+1, bx+1+(bw-2)*min(100,rem)/100, cy+bh/2-1, fill=rem_color(rem), width=0)
+                if window == "weekly":
+                    for day in range(1, 7):
+                        tx = bx + bw * day / 7
+                        c.create_line(tx, cy-bh/2+1, tx, cy+bh/2-1, fill="#111827", width=3)
+                        c.create_line(tx, cy-bh/2+1, tx, cy+bh/2-1, fill="#ffffff", width=1, tags="weekly-separator")
                 text = "不明" if rem is None else f"{rem:g}%" + (" 持越" if rem > 100 else "")
                 self.text(bx+bw+6, cy, text, self.fs, rem_color(rem))
         y = PAD + 12
@@ -463,7 +468,8 @@ class W:
                     if wk == "weekly":
                         for di in range(1, 7):
                             tx = bx + bw * di / 7
-                            c.create_line(tx, cy - bh / 2 + 2, tx, cy + bh / 2 - 2, fill="#6b7280", width=1)
+                            c.create_line(tx, cy - bh / 2 + 1, tx, cy + bh / 2 - 1, fill="#111827", width=3)
+                            c.create_line(tx, cy - bh / 2 + 1, tx, cy + bh / 2 - 1, fill="#ffffff", width=1, tags="weekly-separator")
                         wa = tr.get("week_allowed")
                         if wa is not None:
                             px = bx + (bw * min(100.0, max(0.0, wa)) / 100.0)
