@@ -1,3 +1,6 @@
 *.tmp
 __pycache__/
 *.log
+
+# ローカルブラウザ用の表示専用データ（ウィジェットが自動更新）
+data/usage-local.js

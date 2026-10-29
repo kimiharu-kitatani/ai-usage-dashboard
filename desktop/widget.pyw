@@ -96,6 +96,29 @@ def remaining_window(window, now=None):
     return 100.0 - used
 
 
+def export_browser_data(data, destination=None):
+    """file://用に公開表示項目だけを書き出す。認証/エラー詳細は含めない。"""
+    if not isinstance(data, dict):
+        return
+    payload = {"fetched_at": data.get("fetched_at"), "services": {}}
+    for key in ("claude", "codex"):
+        raw = (data.get("services") or {}).get(key) or {}
+        service = {"as_of": raw.get("as_of")}
+        for name in ("five_hour", "weekly"):
+            window = raw.get(name) or {}
+            service[name] = {"used_percent": numeric_percent(window.get("used_percent")),
+                             "resets_at": window.get("resets_at")}
+        for name in ("reset_count", "reset_count_expires_at"):
+            if name in raw: service[name] = raw[name]
+        payload["services"][key] = service
+    destination = destination or os.path.join(os.path.dirname(DATA), "usage-local.js")
+    text = "window.AI_USAGE_LOCAL = " + json.dumps(payload, ensure_ascii=True, allow_nan=False) + ";\n"
+    temporary = destination + ".tmp"
+    with open(temporary, "w", encoding="utf-8") as stream:
+        stream.write(text)
+    os.replace(temporary, destination)
+
+
 def today_quota(five, weekly, day_track=None, now=None):
     """週リセットの時刻を境界に日割り累積。5時間枠とは独立。"""
     weekly = weekly or {}
@@ -366,7 +389,10 @@ class W:
 
     def loop(self): self.reload(); self.r.after(5 * 60 * 1000, self.loop)
     def reload(self):
-        try: self.data = json.load(open(DATA, encoding="utf-8"))
+        try:
+            self.data = json.load(open(DATA, encoding="utf-8"))
+            try: export_browser_data(self.data)
+            except (OSError, ValueError, TypeError): pass
         except Exception: self.data = None
         self.draw()
 
@@ -413,8 +439,10 @@ class W:
                 if window == "weekly":
                     for day in range(1, 7):
                         tx = bx + bw * day / 7
-                        c.create_line(tx, cy-bh/2+1, tx, cy+bh/2-1, fill="#111827", width=3)
-                        c.create_line(tx, cy-bh/2+1, tx, cy+bh/2-1, fill="#ffffff", width=1, tags="weekly-separator")
+                        c.create_line(tx, cy-bh/2+1, tx, cy+bh/2-1, fill=DM, width=1, dash=(1,2), tags="weekly-separator")
+                if window == "weekly" and not today.get("unknown"):
+                    px = bx + bw * (100 - today["week_allowed"]) / 100
+                    c.create_line(px, cy-bh/2-2, px, cy+bh/2+2, fill="#facc15", width=2, tags="daily-limit")
                 text = "不明" if rem is None else f"{rem:g}%" + (" 持越" if rem > 100 else "")
                 self.text(bx+bw+6, cy, text, self.fs, rem_color(rem))
         y = PAD + 12
@@ -468,12 +496,11 @@ class W:
                     if wk == "weekly":
                         for di in range(1, 7):
                             tx = bx + bw * di / 7
-                            c.create_line(tx, cy - bh / 2 + 1, tx, cy + bh / 2 - 1, fill="#111827", width=3)
-                            c.create_line(tx, cy - bh / 2 + 1, tx, cy + bh / 2 - 1, fill="#ffffff", width=1, tags="weekly-separator")
+                            c.create_line(tx, cy - bh / 2 + 1, tx, cy + bh / 2 - 1, fill=DM, width=1, dash=(1,2), tags="weekly-separator")
                         wa = tr.get("week_allowed")
                         if wa is not None:
-                            px = bx + (bw * min(100.0, max(0.0, wa)) / 100.0)
-                            c.create_line(px, cy - bh / 2 - 1, px, cy + bh / 2 + 1, fill="#ffffff", width=2)
+                            px = bx + bw * (100 - min(100.0, max(0.0, wa))) / 100.0
+                            c.create_line(px, cy - bh / 2 - 1, px, cy + bh / 2 + 1, fill="#facc15", width=2, tags="daily-limit")
                     rem_txt = "不明" if rem is None else f"残り{rem:g}%" + (" 持越" if rem > 100 else "")
                     self.text(bx + bw + 8, cy, rem_txt, fdb, DM if rem is None else color(rem))
                     rt = (f"{'日次加算' if wk == 'today' else 'リセット'} {fmt(d)}（{left(d)}）" if d else "リセット 不明")

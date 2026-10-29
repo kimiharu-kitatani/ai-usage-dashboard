@@ -104,9 +104,9 @@
   .today-n { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
   .today-n.na { font-size: 18px; color: var(--muted); font-weight: 700; }
   .today-l { font-size: 10px; color: var(--muted); margin-top: 1px; }
-  .day-tick { position: absolute; top: 1px; bottom: 1px; width: 1px; background: #fff; opacity: 1; box-shadow: 0 0 0 1px #111827; z-index: 1; pointer-events: none; transform: translateX(-50%); }
+  .day-tick { position: absolute; top: 1px; bottom: 1px; width: 1px; background: repeating-linear-gradient(to bottom, var(--muted) 0 1px, transparent 1px 3px); opacity: .65; box-shadow: none; z-index: 1; pointer-events: none; transform: translateX(-50%); }
   .batt .day-tick { top: 1px; bottom: 1px; }
-  .pace-mark { position: absolute; top: -1px; bottom: -1px; width: 2px; background: #fff; opacity: .95; z-index: 2; pointer-events: none; transform: translateX(-50%); box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
+  .pace-mark { position: absolute; top: -1px; bottom: -1px; width: 2px; background: #facc15; opacity: 1; z-index: 2; pointer-events: none; transform: translateX(-50%); box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
   .batt .pace-mark { top: 0; bottom: 0; }
   /* compact view */
   .ico { width: 16px; height: 16px; flex: none; display: block; }
@@ -316,7 +316,7 @@ function windowRow(label, autoW, manW, manSavedAt, autoAsOf, pacePct, isWeekly) 
   if (pacePct != null && !isNaN(pacePct)) {
     const mark = document.createElement("div"); mark.className = "pace-mark";
     mark.style.left = Math.min(100, Math.max(0, pacePct)) + "%";
-    mark.title = "今日の目標ペース " + (Math.round(pacePct * 10) / 10) + "%";
+    mark.title = "今日の累積利用上限 " + (Math.round((100-pacePct)*10)/10) + "%（残り " + (Math.round(pacePct*10)/10) + "% が境界）";
     dn.appendChild(mark);
   }
   if (rem === null) { dn.classList.add("na-ring"); dv.textContent = "不明"; }
@@ -348,7 +348,7 @@ function render() {
     const wins=[
       {sl:'5h',row:windowRow('5時間枠',auto.five_hour,man&&man.five_hour,manSavedAt,autoAsOf,null,false),pace:null},
       {sl:'今日',row:dailyWindowRow(tr),pace:null},
-      {sl:'1w',row:windowRow('1週間',auto.weekly,man&&man.weekly,manSavedAt,autoAsOf,null,true),pace:null}
+      {sl:'1w',row:windowRow('1週間',auto.weekly,man&&man.weekly,manSavedAt,autoAsOf,tr.unknown?null:100-tr.weekAllowed,true),pace:tr.unknown?null:100-tr.weekAllowed}
     ];
     wins.forEach(({row})=>rows.appendChild(row));
 
@@ -402,6 +402,7 @@ function render() {
       const c2 = l.querySelector(".countdown"); if (cd.dataset.t) { c2.dataset.t = cd.dataset.t; c2.textContent = cd.textContent; }
       dbox.appendChild(l);
     });
+    gBars.title="黄色線：今日の累積利用上限（残り％の境界）";
     g.appendChild(gBars);
     g.addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
     strip.appendChild(g);
@@ -447,7 +448,7 @@ function render() {
   const gg = document.createElement("div"); gg.className = "mg"; gg.title = "Grok Bot（タップで詳細）";
   gg.innerHTML = ICONS.grok + '<span class="wl">週</span><span class="mb na-ring"><div class="fill" style="width:0"></div></span><span class="mp na">不明</span>';
   gg.addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
-  strip.appendChild(gg);
+  // 通常表示はClaude/Codexのみ。Grokは詳細へ。
   const gd = document.createElement("div"); gd.className = "dsv";
   gd.innerHTML = ICONS.grok + '<div><div class="dl"><span class="k">Grok Bot 週 不明</span></div><div class="sub2" style="font-size:10px;color:var(--muted)"></div></div>';
   gd.querySelector(".sub2").textContent = GROK_NOTE;
@@ -542,14 +543,27 @@ function tick() {
   updateMeta();
 }
 
+function loadLocalData() {
+  return new Promise((resolve,reject)=>{
+    const script=document.createElement('script');
+    window.AI_USAGE_LOCAL=undefined;
+    script.src='data/usage-local.js?ts='+Date.now();
+    script.onload=()=>{const payload=window.AI_USAGE_LOCAL;script.remove();if(payload&&payload.services)resolve(payload);else reject(new Error('ローカルデータ不明'))};
+    script.onerror=()=>{script.remove();reject(new Error('ウィジェットを再起動してローカルデータを更新してください'))};
+    document.head.appendChild(script);
+  });
+}
 async function load() {
   try {
-    const res = await fetch("data/usage.json?ts=" + Date.now(), { cache: "no-store" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    DATA = await res.json();
-  } catch (e) {
+    if(location.protocol==='file:') DATA=await loadLocalData();
+    else {
+      const res=await fetch('data/usage.json?ts='+Date.now(),{cache:'no-store'});
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      DATA=await res.json();
+    }
+  } catch(e) {
     console.warn(e);
-    if (!DATA) DATA = null;
+    if(!DATA)DATA=null;
   }
   render();
 }
