@@ -1,4 +1,4 @@
-# AI利用枠 デスクトップウィジェット（枠なし・1行）。data/usage.json をローカルで読むだけ。
+# AI利用枠 デスクトップウィジェット（枠なし・2列3行）。data/usage.json をローカルで読むだけ。
 import json, os, sys, base64, ctypes, math, subprocess, threading, time, datetime as dt, webbrowser, tkinter as tk
 from ctypes import wintypes
 from tkinter import font as tkfont
@@ -21,8 +21,8 @@ KEY = "#010203"  # 透明にする色（他では使わない）
 HALO = "#000000"
 BG, FG, MUTED, LINE, TRACK = "#1b1e25", "#e8eaf0", "#9aa1ae", "#3a3f4b", "#4b5060"
 PACE_OK, PACE_WARN, PACE_BAD = "#22c55e", "#eab308", "#ef4444"
-SERVICES = [("claude", "Claude"), ("codex", "Codex")]
-WINS = [("five_hour", "5h"), ("weekly", "1w")]
+SERVICES = [("claude", "Claude Code"), ("codex", "Codex")]
+WINS = [("five_hour", "5h"), ("today", "今日"), ("weekly", "1w")]
 PAD = 4
 MARGIN = 4
 
@@ -76,92 +76,55 @@ def rem_color(rem):
     if rem >= 20: return PACE_WARN
     return PACE_BAD
 
-def today_quota(five, weekly, day_track):
-    """今日の枠の残量%。day_track.day_start_used[d] が必要。推測しない。
-    shown = min(今日ペース残%, 5h残%)。five_limited なら 5h 側。
-    """
-    five = five or {}; weekly = weekly or {}; day_track = day_track or {}
-    wu = weekly.get("used_percent"); wr = todt(weekly.get("resets_at"))
-    fu = five.get("used_percent"); fr = todt(five.get("resets_at"))
-    if wu is None or wr is None:
-        return {"unknown": True}
-    try: wu = float(wu)
+def numeric_percent(value):
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        value = float(value)
+        return value if math.isfinite(value) and 0 <= value <= 100 else None
     except (TypeError, ValueError):
+        return None
+
+
+def remaining_window(window, now=None):
+    window = window or {}
+    now = now or dt.datetime.now(JST)
+    used = numeric_percent(window.get("used_percent"))
+    reset = todt(window.get("resets_at"))
+    if used is None or (reset is not None and now >= reset):
+        return None
+    return 100.0 - used
+
+
+def today_quota(five, weekly, day_track=None, now=None):
+    """週リセットの時刻を境界に日割り累積。5時間枠とは独立。"""
+    weekly = weekly or {}
+    used = numeric_percent(weekly.get("used_percent"))
+    reset = todt(weekly.get("resets_at"))
+    now = now or dt.datetime.now(JST)
+    if used is None or reset is None:
         return {"unknown": True}
-    ws = todt(day_track.get("week_start")) or (wr - dt.timedelta(days=7))
-    elapsed = (dt.datetime.now(JST) - ws).total_seconds()
-    d = int(elapsed // 86400) + 1 if elapsed >= 0 else 1
-    if d < 1: d = 1
-    if d > 7: d = 7
-    week_allowed = d * 100 / 7
-    dsu_map = day_track.get("day_start_used") or {}
-    if str(d) not in dsu_map and d not in dsu_map:
+    start = reset - dt.timedelta(days=7)
+    if not start <= now < reset:
         return {"unknown": True}
-    dsu = dsu_map.get(str(d), dsu_map.get(d))
-    if dsu is None:
-        return {"unknown": True}
-    try: dsu = float(dsu)
-    except (TypeError, ValueError):
-        return {"unknown": True}
-    today_q = week_allowed - dsu
-    today_u = wu - dsu
-    now = dt.datetime.now(JST)
-    if fr is not None and fr < now:
-        five_remain = 100.0
-        five_used = 0.0
-    elif fu is not None:
-        try:
-            five_used = float(fu)
-            five_remain = 100.0 - five_used
-        except (TypeError, ValueError):
-            return {"unknown": True}
-    else:
-        return {"unknown": True}
-    if today_q <= 0:
-        return {
-            "unknown": False, "no_quota": True, "shown": None,
-            "label": "今日の枠なし", "tag": "日", "color": PACE_BAD,
-            "week_allowed": week_allowed, "today_quota": today_q,
-            "today_used": today_u, "five_limited": False, "day": d,
-            "five_remain": five_remain, "remain_today": today_q - today_u,
-        }
-    remain_today = today_q - today_u
-    remain_pct = max(0.0, (remain_today / today_q) * 100.0)
-    five_limited = five_remain < remain_today
-    if five_limited:
-        shown = max(0, int(math.floor(five_remain)))
-        label = "5時間枠で制限中"
-        tag = "5h"
-        rem_for_color = five_remain
-    else:
-        shown = max(0, int(math.floor(remain_pct)))
-        label = "今日の分で制限中"
-        tag = "日"
-        rem_for_color = remain_pct
-    return {
-        "unknown": False, "no_quota": False, "shown": shown, "label": label,
-        "tag": tag, "color": rem_color(rem_for_color),
-        "week_allowed": week_allowed,
-        "today_quota": today_q, "today_used": today_u,
-        "five_limited": five_limited, "day": d,
-        "remain_pct": remain_pct, "five_remain": five_remain,
-        "remain_today": remain_today,
-    }
+    day = int((now - start).total_seconds() // 86400) + 1
+    allowance = day * 100.0 / 7
+    remaining = max(0.0, allowance - used)
+    percent = round(remaining * 7, 1)
+    return {"unknown": False, "no_quota": False, "shown": percent,
+            "label": "今日使える分", "tag": "今日", "color": rem_color(percent),
+            "week_allowed": allowance, "day": day, "remain_pct": percent,
+            "remain_today": remaining, "carry": percent > 100,
+            "next_day": min(reset, start + dt.timedelta(days=day))}
+
 
 def today_line(tr):
-    """詳細用の一文（サブテキスト）。"""
     if tr.get("unknown"):
-        return "今日の枠 不明"
-    if tr.get("no_quota"):
-        return "今日の枠なし"
-    tq = tr["today_quota"]
-    tu = max(0.0, tr["today_used"])
-    tq_s = f"{tq:.1f}".rstrip("0").rstrip(".")
-    tu_s = f"{tu:.1f}".rstrip("0").rstrip(".")
-    base = f"今日使える分 {tq_s}% のうち {tu_s}% 使用（週の枠全体に対する%）"
-    if tr.get("five_limited"):
-        return base + " · 5時間枠で制限中"
-    return base + " · 今日の分で制限中"
+        return "今日使える分 不明"
+    return (f"週{tr['day']}日目・累積上限{tr['week_allowed']:.1f}%・"
+            f"残り{tr['remain_today']:.1f}%（週全体比） / 1日分=100/7%" +
+            ("・持ち越しあり（バー上限100%）" if tr["carry"] else ""))
+
 
 HELP_URL = "https://kimiharu-kitatani.github.io/ai-usage-dashboard/help.html"
 
@@ -431,31 +394,33 @@ class W:
     def draw(self):
         c = self.c; c.delete("all"); self._halo = True
         svcs = (self.data or {}).get("services", {})
-        H = 20; y = PAD + H // 2; x = PAD + 2
-        for i, (key, name) in enumerate(SERVICES):
-            if i:
-                x += 5; c.create_line(x, PAD + 2, x, PAD + H - 2, fill="#9aa1ae", width=2); x += 6
-            x = self.icon(key, x, y - 7) + 4
-            s = svcs.get(key) or {}
-            tr = today_quota(s.get("five_hour"), s.get("weekly"), s.get("day_track"))
-            if tr.get("unknown"):
-                x = self.text(x, y, "不明", self.ft, MUTED) + 2
-                x = self.text(x, y, "日", self.fs, MUTED) + 6
-            elif tr.get("no_quota"):
-                x = self.text(x, y, "枠なし", self.ft, PACE_BAD) + 2
-                x = self.text(x, y, "日", self.fs, MUTED) + 6
-            else:
-                x = self.text(x, y, f"{tr['shown']}%", self.ft, tr["color"]) + 2
-                x = self.text(x, y, tr.get("tag") or "日", self.fs, MUTED) + 6
-        x += 6
+        H = 108
+        width = 492
+        for column, (key, name) in enumerate(SERVICES):
+            x = PAD + 4 + column * 242
+            self.icon(key, x, PAD + 5)
+            self.text(x + 20, PAD + 12, "Claude Code" if key == "claude" else name, self.f)
+            service = svcs.get(key) or {}
+            today = today_quota(service.get("five_hour"), service.get("weekly"))
+            for row, (window, label) in enumerate(WINS):
+                rem = (None if today.get("unknown") else today["shown"]) if window == "today" else remaining_window(service.get(window))
+                cy = PAD + 37 + row * 24
+                self.text(x, cy, label, self.fs, DM)
+                bx, bw, bh = x + 40, 100, 12
+                c.create_rectangle(bx, cy - bh/2, bx+bw, cy+bh/2, outline=DM, dash=(2,2) if rem is None else None)
+                if rem is not None and rem > 0:
+                    c.create_rectangle(bx+1, cy-bh/2+1, bx+1+(bw-2)*min(100,rem)/100, cy+bh/2-1, fill=rem_color(rem), width=0)
+                text = "不明" if rem is None else f"{rem:g}%" + (" 持越" if rem > 100 else "")
+                self.text(bx+bw+6, cy, text, self.fs, rem_color(rem))
+        y = PAD + 12
+        x = width - 42
         for tag, label, fn in (("b_det", "▲" if self.detail else "▼", self.toggle), ("b_rel", self.rel_label(), self.refresh)):
-            c.create_rectangle(x, PAD + 2, x + 16, PAD + H - 2, outline="#9aa1ae", fill=BG, tags=tag)
+            c.create_rectangle(x, PAD + 3, x + 16, PAD + 21, outline=DM, fill=BG, tags=tag)
             c.create_text(x + 8, y, text=label, font=self.fs, fill=FG, tags=tag)
             c.tag_bind(tag, "<ButtonRelease-1>", lambda e, fn=fn: self.r.after(1, fn))
             if tag == "b_rel":
                 c.tag_bind(tag, "<Enter>", lambda e: self.show_tip(e)); c.tag_bind(tag, "<Leave>", lambda e: self.hide_tip())
             x += 19
-        width = x - 2 + PAD
         height = PAD * 2 + H
         self._halo = False
         self.row_w, self.row_h = width, height
@@ -473,13 +438,17 @@ class W:
                 if si: yy += 4; c.create_line(x0, yy - 2, max(width, 300) - PAD - 6, yy - 2, fill=LINE); yy += 4
                 self.icon(key, x0, yy + LH // 2 - 7)
                 width = max(width, self.text(x0 + 20, yy + LH // 2, name, fdb) + PAD + 10); yy += LH
-                tr = today_quota(s.get("five_hour"), s.get("weekly"), s.get("day_track"))
+                tr = today_quota(s.get("five_hour"), s.get("weekly"))
                 tline = today_line(tr)
-                tcol = MUTED if tr.get("unknown") else tr.get("color", FG)
-                width = max(width, self.text(x0 + 8, yy + LH // 2, tline, fdb if not tr.get("unknown") else fd, tcol) + PAD + 10); yy += LH
+                tcol = MUTED if tr.get("unknown") else tr["color"]
+                width = max(width, self.text(x0 + 8, yy + LH // 2, tline, fd, tcol) + PAD + 10); yy += LH
                 for wk, wl in WINS:
                     w = s.get(wk) or {}; u = w.get("used_percent"); d = todt(w.get("resets_at"))
-                    rem = None if u is None else max(0.0, min(100.0, 100 - float(u)))
+                    if wk == "today":
+                        rem = None if tr.get("unknown") else tr["shown"]
+                        d = tr.get("next_day")
+                    else:
+                        rem = remaining_window(w)
                     cy = yy + LH // 2
                     self.text(x0 + 8, cy, wl, fdb, DM)
                     # 小さい電池バー（週は目盛り＋ペース線）
@@ -489,7 +458,7 @@ class W:
                                        dash=(2, 2) if rem is None else None)
                     c.create_rectangle(bx + bw + 1, cy - 2, bx + bw + 3, cy + 2, fill="#d0d4dc", outline="#d0d4dc")
                     if rem:
-                        c.create_rectangle(bx + 2, cy - bh / 2 + 2, bx + 2 + (bw - 3) * rem / 100,
+                        c.create_rectangle(bx + 2, cy - bh / 2 + 2, bx + 2 + (bw - 3) * min(100, rem) / 100,
                                            cy + bh / 2 - 1, fill=color(rem), width=0)
                     if wk == "weekly":
                         for di in range(1, 7):
@@ -499,18 +468,15 @@ class W:
                         if wa is not None:
                             px = bx + (bw * min(100.0, max(0.0, wa)) / 100.0)
                             c.create_line(px, cy - bh / 2 - 1, px, cy + bh / 2 + 1, fill="#ffffff", width=2)
-                    rem_txt = "取得なし" if rem is None else f"残り{round(rem)}%"
+                    rem_txt = "不明" if rem is None else f"残り{rem:g}%" + (" 持越" if rem > 100 else "")
                     self.text(bx + bw + 8, cy, rem_txt, fdb, DM if rem is None else color(rem))
-                    rt = (f"リセット {fmt(d)}（{left(d)}）" if d else "リセット 取得なし")
+                    rt = (f"{'日次加算' if wk == 'today' else 'リセット'} {fmt(d)}（{left(d)}）" if d else "リセット 不明")
                     width = max(width, self.text(c2 + 40, cy, rt, fd) + PAD + 10); yy += LH
-                wkw = s.get("weekly") or {}; wu = wkw.get("used_percent")
-                ol = outlook(None if wu is None else max(0.0, min(100.0, 100 - float(wu))), todt(wkw.get("resets_at")))
-                if ol: width = max(width, self.text(x0 + 8, yy + LH // 2, ol, fd, FG) + PAD + 10); yy += LH
                 a = todt(s.get("as_of")); rc = s.get("reset_count")
                 old = a and (dt.datetime.now(JST) - a).total_seconds() > 6 * 3600
                 line = f"取得 {fmt(a)}（{ago(a)}）" if a else "取得 不明"
                 if old: line += "  古い値"
-                rcs = "リセット回数 " + ("取得なし" if rc is None else f"{rc}回")
+                rcs = "リセット回数 " + ("不明" if rc is None else f"{rc}回")
                 self.text(x0 + 8, yy + LH // 2, rcs, fd, DM); yy += LH
                 width = max(width, self.text(x0 + 8, yy + LH // 2, line, fd, "#eab308" if old else DM) + PAD + 10); yy += LH
             msg = "最終更新 " + fmt(fa) + (f"（{ago(fa)}）" if fa else "")
