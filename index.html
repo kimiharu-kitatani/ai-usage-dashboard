@@ -264,6 +264,15 @@ function remColor(rem) {
   return "var(--bad)";
 }
 
+function weeklyColor(tr, rem) {
+  if (rem === null || rem === undefined) return "var(--track)";
+  if (!tr || tr.unknown) return rem >= 50 ? "#22c55e" : rem >= 20 ? "#eab308" : "#ef4444";
+  const pct = tr.shown != null ? tr.shown : 0;
+  if (pct >= 50) return "#22c55e";
+  if (pct > 0) return "#eab308";
+  return "#ef4444";
+}
+
 function todayRemain(fiveAuto, fiveMan, weekAuto, weekMan, manSavedAt, autoAsOf, dayTrack, now = Date.now()) {
   const wu = pick(num(weekAuto && weekAuto.used_percent), num(weekMan && weekMan.used_percent), manSavedAt, autoAsOf);
   const wr = pick(weekAuto && weekAuto.resets_at, weekMan && weekMan.resets_at, manSavedAt, autoAsOf);
@@ -293,14 +302,14 @@ function dailyWindowRow(tr) {
   return row;
 }
 
-function windowRow(label, autoW, manW, manSavedAt, autoAsOf, pacePct, isWeekly) {
+function windowRow(label, autoW, manW, manSavedAt, autoAsOf, pacePct, isWeekly, tr) {
   const p = pick(num(autoW && autoW.used_percent), num(manW && manW.used_percent), manSavedAt, autoAsOf);
   const r = pick(autoW && autoW.resets_at, manW && manW.resets_at, manSavedAt, autoAsOf);
   const row = document.createElement("div"); row.className = "row";
   const used = p.v;
   const resetDate = toDate(r.v);
   const rem = used === null || used < 0 || used > 100 || (resetDate && Date.now() >= resetDate.getTime()) ? null : 100 - used;
-  const color = rem === null ? "var(--track)" : rem >= 50 ? "#3b82f6" : rem >= 20 ? "#eab308" : "#ef4444";
+  const color = isWeekly ? weeklyColor(tr, rem) : (rem === null ? "var(--track)" : rem >= 50 ? "#3b82f6" : rem >= 20 ? "#eab308" : "#ef4444");
   const d = toDate(r.v);
   row.innerHTML =
     '<div class="row-head"><span class="label"></span><span class="val"></span></div>' +
@@ -348,7 +357,7 @@ function render() {
     const wins=[
       {sl:'5h',row:windowRow('5時間枠',auto.five_hour,man&&man.five_hour,manSavedAt,autoAsOf,null,false),pace:null},
       {sl:'今日',row:dailyWindowRow(tr),pace:null},
-      {sl:'1w',row:windowRow('1週間',auto.weekly,man&&man.weekly,manSavedAt,autoAsOf,tr.unknown?null:100-tr.weekAllowed,true),pace:tr.unknown?null:100-tr.weekAllowed}
+      {sl:'1w',row:windowRow('1週間',auto.weekly,man&&man.weekly,manSavedAt,autoAsOf,tr.unknown?null:100-tr.weekAllowed,true,tr),pace:tr.unknown?null:100-tr.weekAllowed}
     ];
     wins.forEach(({row})=>rows.appendChild(row));
 

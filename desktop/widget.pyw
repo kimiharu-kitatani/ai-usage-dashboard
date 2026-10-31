@@ -1,4 +1,4 @@
-# AI利用枠 デスクトップウィジェット（枠なし・2列3行）。data/usage.json をローカルで読むだけ。
+# AI利用枠 デスクトップウィジェット（Claude Code / Codex 2ウィンドウ分割版）
 import json, os, sys, base64, ctypes, math, subprocess, threading, time, datetime as dt, webbrowser, tkinter as tk
 from ctypes import wintypes
 from tkinter import font as tkfont
@@ -25,6 +25,7 @@ SERVICES = [("claude", "Claude Code"), ("codex", "Codex")]
 WINS = [("five_hour", "5h"), ("today", "今日"), ("weekly", "1w")]
 PAD = 4
 MARGIN = 4
+HELP_URL = "https://kimiharu-kitatani.github.io/ai-usage-dashboard/help.html"
 
 class MONITORINFO(ctypes.Structure):
     _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT), ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
@@ -68,13 +69,32 @@ def short_left(d):
     if s >= 86400: return f"{s // 86400}d"
     return f"{s // 3600}:{s % 3600 // 60:02d}"
 
-
 def rem_color(rem):
     """残量%の色（電池と同じ閾値: >=50緑 / 20-50黄 / <20赤）"""
     if rem is None: return MUTED
     if rem >= 50: return PACE_OK
     if rem >= 20: return PACE_WARN
     return PACE_BAD
+
+def weekly_color(today, weekly_rem):
+    """
+    週間表示の色:
+    今日使える枠（1日分）の残り具合で判定
+    - 50%以上: 緑 (PACE_OK)
+    - 50%未満（>0%）: 黄 (PACE_WARN)
+    - 使い切り（<=0%）: 赤 (PACE_BAD)
+    """
+    if weekly_rem is None:
+        return MUTED
+    if not today or today.get("unknown"):
+        return rem_color(weekly_rem)
+    pct = today.get("shown", 0.0)
+    if pct >= 50.0:
+        return PACE_OK
+    elif pct > 0.0:
+        return PACE_WARN
+    else:
+        return PACE_BAD
 
 def numeric_percent(value):
     if isinstance(value, bool) or value is None:
@@ -85,7 +105,6 @@ def numeric_percent(value):
     except (TypeError, ValueError):
         return None
 
-
 def remaining_window(window, now=None):
     window = window or {}
     now = now or dt.datetime.now(JST)
@@ -94,7 +113,6 @@ def remaining_window(window, now=None):
     if used is None or (reset is not None and now >= reset):
         return None
     return 100.0 - used
-
 
 def export_browser_data(data, destination=None):
     """file://用に公開表示項目だけを書き出す。認証/エラー詳細は含めない。"""
@@ -118,7 +136,6 @@ def export_browser_data(data, destination=None):
         stream.write(text)
     os.replace(temporary, destination)
 
-
 def today_quota(five, weekly, day_track=None, now=None):
     """週リセットの時刻を境界に日割り累積。5時間枠とは独立。"""
     weekly = weekly or {}
@@ -140,26 +157,12 @@ def today_quota(five, weekly, day_track=None, now=None):
             "remain_today": remaining, "carry": percent > 100,
             "next_day": min(reset, start + dt.timedelta(days=day))}
 
-
 def today_line(tr):
     if tr.get("unknown"):
         return "今日使える分 不明"
     return (f"週{tr['day']}日目・累積上限{tr['week_allowed']:.1f}%・"
             f"残り{tr['remain_today']:.1f}%（週全体比） / 1日分=100/7%" +
             ("・持ち越しあり（バー上限100%）" if tr["carry"] else ""))
-
-
-HELP_URL = "https://kimiharu-kitatani.github.io/ai-usage-dashboard/help.html"
-
-
-WD = "月火水木金土日"
-def outlook(rem, d):
-    """週の残り%とリセット曜日から見通し文（値がなければ None）"""
-    if rem is None or not d: return None
-    w = WD[d.weekday()] + "曜日"
-    if rem >= 50: return f"順調です。{w}のリセットまで余裕を持って利用できる見込みです。"
-    if rem >= 20: return f"やや注意。{w}のリセットまで計画的に。"
-    return f"余裕少なめ。{w}のリセットまで注意。"
 
 def toast(title, body):
     """Windows のトースト通知（PowerShell の WinRT API。追加インストール不要）"""
@@ -181,62 +184,102 @@ def ago(d):
     m = int((dt.datetime.now(JST) - d).total_seconds() // 60)
     return f"{m}分前" if m < 60 else f"{m // 60}時間{m % 60}分前" if m < 1440 else f"{m // 1440}日前"
 
-class W:
-    def __init__(self):
-        self.r = tk.Tk(); self.r.overrideredirect(True); self.r.attributes("-topmost", True)
+
+class ServiceWidget:
+    def __init__(self, app, key, name):
+        self.app = app
+        self.key = key
+        self.name = name
+
+        # Tkウィンドウ初期化
+        self.r = tk.Toplevel(self.app.root)
+        self.r.overrideredirect(True)
+        self.r.attributes("-topmost", True)
         self.r.configure(bg=KEY)
-        try: self.r.wm_attributes("-transparentcolor", KEY)  # 1行表示の背景を透明に
-        except Exception: pass
+        try:
+            self.r.wm_attributes("-transparentcolor", KEY)
+        except Exception:
+            pass
+
         self.f = tkfont.Font(family="Yu Gothic UI", size=9, weight="bold")
         self.fs = tkfont.Font(family="Yu Gothic UI", size=8)
-        self.ft = tkfont.Font(family="Yu Gothic UI", size=10, weight="bold")  # あとX%
+        self.ft = tkfont.Font(family="Yu Gothic UI", size=10, weight="bold")
         self.fd = tkfont.Font(family="Yu Gothic UI", size=11)
         self.fdb = tkfont.Font(family="Yu Gothic UI", size=11, weight="bold")
-        # 半透明の背景用ウィンドウ（本体の真後ろに置き、一緒に動かす）
-        self.bgw = tk.Toplevel(self.r); self.bgw.overrideredirect(True); self.bgw.configure(bg=BG)
+
+        # 半透明背景ウィンドウ
+        self.bgw = tk.Toplevel(self.r)
+        self.bgw.overrideredirect(True)
+        self.bgw.configure(bg=BG)
         self.bg_alpha = BG_ALPHA_DARK
-        try: self.bgw.attributes("-alpha", BG_ALPHA_DARK); self.bgw.attributes("-topmost", True)
-        except Exception: pass
-        self.row_w, self.row_h = 10, 10
+        try:
+            self.bgw.attributes("-alpha", BG_ALPHA_DARK)
+            self.bgw.attributes("-topmost", True)
+        except Exception:
+            pass
+
+        self.row_w, self.row_h = 246, 116
         self.c = tk.Canvas(self.r, bg=KEY, highlightthickness=0, bd=0)
         self.c.pack()
-        self.detail = "--detail" in sys.argv; self.data = None
-        self.busy = False; self.status = None; self.err = None; self.spin = 0; self.tip = None
+
+        self.detail = False
+        self.tip = None
+        self.hidden_timer_id = None
+
         for wdg in (self.c, self.bgw):
-            wdg.bind("<ButtonPress-1>", self.start); wdg.bind("<B1-Motion>", self.move)
-            wdg.bind("<ButtonRelease-1>", self.save_pos); wdg.bind("<Double-Button-1>", lambda e: self.toggle())
+            wdg.bind("<ButtonPress-1>", self.start)
+            wdg.bind("<B1-Motion>", self.move)
+            wdg.bind("<ButtonRelease-1>", self.save_pos)
+            wdg.bind("<Double-Button-1>", lambda e: self.toggle())
+
         self.r.bind("<Configure>", lambda e: self.sync_bg())
+
+        # コンテキストメニュー
         self.m = tk.Menu(self.r, tearoff=0)
         self.m.add_command(label="詳細", command=self.toggle)
-        self.m.add_command(label="更新", command=self.reload)
-        self.m.add_separator(); self.m.add_command(label="閉じる", command=self.close)
+        self.m.add_command(label="更新", command=self.app.refresh)
+        self.m.add_command(label="15分非表示", command=self.hide_15m)
+        self.m.add_command(label="リセットまで非表示", command=self.hide_until_reset)
+        self.m.add_separator()
+        self.m.add_command(label="閉じる", command=self.close)
         self.r.protocol("WM_DELETE_WINDOW", self.close)
         self.c.bind("<Button-3>", lambda e: self.m.tk_popup(e.x_root, e.y_root))
         self.bgw.bind("<Button-3>", lambda e: self.m.tk_popup(e.x_root, e.y_root))
+
         for k, d in (("<Left>", (-1, 0)), ("<Right>", (1, 0)), ("<Up>", (0, -1)), ("<Down>", (0, 1))):
-            self.r.bind(k, lambda e, d=d: self.snap(*d)); self.bgw.bind(k, lambda e, d=d: self.snap(*d))
+            self.r.bind(k, lambda e, d=d: self.snap(*d))
+            self.bgw.bind(k, lambda e, d=d: self.snap(*d))
+
         self.first = False
-        try:
-            p = json.load(open(POS, encoding="utf-8")); self.r.geometry(f"+{int(p['x'])}+{int(p['y'])}")
-        except Exception:
-            self.first = True; self.r.geometry("+0+0")
-            try: self.r.attributes("-alpha", 0.0)
-            except Exception: pass
-        self.reload(); self.loop(); self.r.after(5000, self.check_resets)
-        if "--test-toast" in sys.argv: toast("AI利用枠ウィジェット", "テスト通知: Claude の5時間枠がリセットされました（表示確認用）")
-        self.r.after(300, self.r.focus_force); self.r.after(500, self.keep_bg); self.r.after(800, self.adapt_bg)
+        pos_info = self.app.load_pos(self.key)
+        if pos_info:
+            self.r.geometry(f"+{int(pos_info['x'])}+{int(pos_info['y'])}")
+        else:
+            self.first = True
+            self.r.geometry("+0+0")
+            try:
+                self.r.attributes("-alpha", 0.0)
+            except Exception:
+                pass
+
+        self.draw()
+        self.r.after(300, self.r.focus_force)
+        self.r.after(500, self.keep_bg)
+        self.r.after(800, self.adapt_bg)
 
     def hwnd(self):
-        try: return ctypes.windll.user32.GetAncestor(self.r.winfo_id(), 2) or self.r.winfo_id()
-        except Exception: return self.r.winfo_id()
+        try:
+            return ctypes.windll.user32.GetAncestor(self.r.winfo_id(), 2) or self.r.winfo_id()
+        except Exception:
+            return self.r.winfo_id()
 
     def snap(self, dx, dy):
         wa = work_area(self.hwnd())
         if not wa: return
         L, T, R, B, mw = wa
-        # Tk と Win32 で DPI スケールが違う場合に合わせる
         k = self.r.winfo_screenwidth() / mw if mw else 1.0
-        if abs(k - 1) > 0.02: L, T, R, B = (round(v * k) for v in (L, T, R, B))
+        if abs(k - 1) > 0.02:
+            L, T, R, B = (round(v * k) for v in (L, T, R, B))
         self.r.update_idletasks()
         w, h = self.r.winfo_width(), self.r.winfo_height()
         x, y = self.r.winfo_x(), self.r.winfo_y()
@@ -247,43 +290,34 @@ class W:
         if dx: x = nxt(x, L, R, w, dx)
         if dy: y = nxt(y, T, B, h, dy)
         self.home = None
-        self.r.geometry(f"+{x}+{y}"); self.save_pos(xy=(x, y))
+        self.r.geometry(f"+{x}+{y}")
+        self.save_pos(xy=(x, y))
 
     def sync_bg(self):
         try:
             self.bgw.geometry(f"{self.row_w}x{self.row_h}+{self.r.winfo_x()}+{self.r.winfo_y()}")
-            self.r.lift(); self.bgw.lower(self.r)
-        except Exception: pass
+            self.r.lift()
+            self.bgw.lower(self.r)
+        except Exception:
+            pass
 
     def sample_lum(self):
-        """ウィジェットのすぐ外側の数点の画面色から明るさ(0-1)を出す。
-        GetPixel は物理ピクセル座標。tk の論理座標に DPI 倍率をかける。"""
         try:
             u, g = ctypes.windll.user32, ctypes.windll.gdi32
-            # DPI 倍率（論理→物理）。ウィンドウの DPI を優先
             scale = 1.0
             try:
                 hwnd = self.r.winfo_id()
-                # winfo_id は Tk の内部ハンドル。親の実 HWND を取る
                 hwnd = u.GetParent(hwnd) or hwnd
                 dpi = ctypes.windll.user32.GetDpiForWindow(hwnd)
-                if dpi:
-                    scale = dpi / 96.0
+                if dpi: scale = dpi / 96.0
             except Exception:
-                try:
-                    scale = float(ctypes.windll.shcore.GetScaleFactorForDevice(0)) / 100.0
-                except Exception:
-                    try:
-                        hdc = u.GetDC(0); dpi = g.GetDeviceCaps(hdc, 88); u.ReleaseDC(0, hdc)
-                        scale = dpi / 96.0
-                    except Exception:
-                        scale = 1.0
+                try: scale = float(ctypes.windll.shcore.GetScaleFactorForDevice(0)) / 100.0
+                except Exception: scale = 1.0
             x = int(self.r.winfo_x() * scale)
             y = int(self.r.winfo_y() * scale)
             w = int(self.row_w * scale)
             h = int(self.row_h * scale)
-            # 仮想画面の物理サイズ（マルチモニタ）
-            vx = u.GetSystemMetrics(76)   # SM_XVIRTUALSCREEN
+            vx = u.GetSystemMetrics(76)
             vy = u.GetSystemMetrics(77)
             vw = u.GetSystemMetrics(78)
             vh = u.GetSystemMetrics(79)
@@ -306,7 +340,8 @@ class W:
             return None
 
     def adapt_bg(self):
-        self.adapt_once(); self.r.after(SAMPLE_MS, self.adapt_bg)
+        self.adapt_once()
+        self.r.after(SAMPLE_MS, self.adapt_bg)
 
     def adapt_once(self):
         lum = self.sample_lum()
@@ -319,22 +354,29 @@ class W:
                 except Exception: pass
 
     def keep_bg(self):
-        self.sync_bg(); self.r.after(1500, self.keep_bg)
+        self.sync_bg()
+        self.r.after(1500, self.keep_bg)
 
     def start(self, e):
-        self.r.focus_force(); self.sync_bg()
-        self.dx, self.dy = e.x_root - self.r.winfo_x(), e.y_root - self.r.winfo_y()
+        self.r.focus_force()
+        self.sync_bg()
+        self.dx = e.x_root - self.r.winfo_x()
+        self.dy = e.y_root - self.r.winfo_y()
+
     def move(self, e):
         self.home = None
-        self.r.geometry(f"+{e.x_root - self.dx}+{e.y_root - self.dy}"); self.sync_bg()
+        self.r.geometry(f"+{e.x_root - self.dx}+{e.y_root - self.dy}")
+        self.sync_bg()
+
     def save_pos(self, e=None, xy=None):
         try:
-            os.makedirs(STATE, exist_ok=True)
             home = getattr(self, "home", None)
             x, y = xy or (home[:2] if home else (self.r.winfo_x(), self.r.winfo_y()))
-            self.r.after(300, self.adapt_once)  # 動かした直後にも明るさを確認
-            json.dump({"x": x, "y": y, "w": self.r.winfo_width(), "h": self.r.winfo_height()}, open(POS, "w", encoding="utf-8"))
-        except Exception: pass
+            self.r.after(300, self.adapt_once)
+            self.app.save_pos(self.key, x, y, self.r.winfo_width(), self.r.winfo_height())
+        except Exception:
+            pass
+
     def toggle(self):
         self.r.update_idletasks()
         x, y, w, h = self.r.winfo_x(), self.r.winfo_y(), self.r.winfo_width(), self.r.winfo_height()
@@ -344,11 +386,335 @@ class W:
             if wa:
                 ar = x + w >= wa[2] - MARGIN - 2 or x + w / 2 > (wa[0] + wa[2]) / 2
                 ab = y + h >= wa[3] - MARGIN - 2 or y + h / 2 > (wa[1] + wa[3]) / 2
-            self.home = (x, y, w, h, ar, ab)   # 開く前の位置（ユーザーの位置）
-        self.detail = not self.detail; self.draw()
+            self.home = (x, y, w, h, ar, ab)
+        self.detail = not self.detail
+        self.draw()
+
+    def icon(self, key, x, y):
+        c = self.c; cx, cy = x + 7, y + 7
+        if key == "claude":
+            for a in range(0, 180, 30):
+                r = math.radians(a); dx, dy = 6.5 * math.cos(r), 6.5 * math.sin(r)
+                c.create_line(cx - dx, cy - dy, cx + dx, cy + dy, fill="#D97757", width=2, capstyle="round")
+        else:
+            c.create_rectangle(x, y, x + 14, y + 14, fill="#000000", outline="#6b7280")
+            c.create_line(x + 3, y + 4, x + 6, y + 7, x + 3, y + 10, fill="#ffffff", width=1.6)
+            c.create_line(x + 7.5, y + 10.5, x + 11, y + 10.5, fill="#ffffff", width=1.6)
+        return x + 14
+
+    def text(self, x, y, s, fnt=None, fill=FG):
+        fnt = fnt or self.f
+        if getattr(self, "_halo", False):
+            for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
+                self.c.create_text(x + ox, y + oy, text=s, anchor="w", font=fnt, fill=HALO)
+        self.c.create_text(x, y, text=s, anchor="w", font=fnt, fill=fill)
+        return x + fnt.measure(s)
+
+    def draw(self):
+        c = self.c; c.delete("all"); self._halo = True
+        svcs = (self.app.data or {}).get("services", {})
+        service = svcs.get(self.key) or {}
+        today = today_quota(service.get("five_hour"), service.get("weekly"))
+
+        H = 108
+        width = 246
+        x = PAD + 4
+
+        # アイコンとタイトル
+        self.icon(self.key, x, PAD + 5)
+        self.text(x + 20, PAD + 12, self.name, self.f)
+
+        # 3行のバー
+        for row, (window, label) in enumerate(WINS):
+            rem = (None if today.get("unknown") else today["shown"]) if window == "today" else remaining_window(service.get(window))
+            cy = PAD + 37 + row * 24
+            self.text(x, cy, label, self.fs, DM)
+            bx, bw, bh = x + 36, 100, 12
+            c.create_rectangle(bx, cy - bh/2, bx+bw, cy+bh/2, outline=DM, dash=(2,2) if rem is None else None)
+
+            # 色決定
+            if window == "weekly":
+                bar_col = weekly_color(today, rem)
+            elif window == "today":
+                bar_col = rem_color(rem)
+            else:
+                bar_col = rem_color(rem)
+
+            if rem is not None and rem > 0:
+                c.create_rectangle(bx+1, cy-bh/2+1, bx+1+(bw-2)*min(100,rem)/100, cy+bh/2-1, fill=bar_col, width=0)
+            if window == "weekly":
+                for day in range(1, 7):
+                    tx = bx + bw * day / 7
+                    c.create_line(tx, cy-bh/2+1, tx, cy+bh/2-1, fill=DM, width=1, dash=(1,2), tags="weekly-separator")
+            if window == "weekly" and not today.get("unknown"):
+                px = bx + bw * (100 - today["week_allowed"]) / 100
+                c.create_line(px, cy-bh/2-2, px, cy+bh/2+2, fill="#facc15", width=2, tags="daily-limit")
+            text = "不明" if rem is None else f"{rem:g}%" + (" 持越" if rem > 100 else "")
+            self.text(bx+bw+6, cy, text, self.fs, bar_col)
+
+        # 右上の5つのボタン
+        # 1: 詳細, 2: 更新, 3: 15分非表示, 4: リセットまで非表示, 5: 閉じる
+        y = PAD + 12
+        btns = [
+            ("b_det", "▲" if self.detail else "▼", self.toggle, "詳細（展開/折りたたみ）"),
+            ("b_rel", self.app.rel_label(), self.app.refresh, "今すぐ取得（Claude・Codex）"),
+            ("b_h15", "15", self.hide_15m, "15分間非表示"),
+            ("b_hrst", "R", self.hide_until_reset, "次回リセットまで非表示"),
+            ("b_close", "✕", self.close, "閉じる")
+        ]
+        bx_start = width - 4 - len(btns) * 19
+        for i, (tag, label, fn, tip) in enumerate(btns):
+            btn_x = bx_start + i * 19
+            c.create_rectangle(btn_x, PAD + 3, btn_x + 16, PAD + 21, outline=DM, fill=BG, tags=tag)
+            c.create_text(btn_x + 8, y, text=label, font=self.fs, fill=FG, tags=tag)
+            c.tag_bind(tag, "<ButtonRelease-1>", lambda e, fn=fn: self.r.after(1, fn))
+            c.tag_bind(tag, "<Enter>", lambda e, t=tip: self.show_tip(e, t))
+            c.tag_bind(tag, "<Leave>", lambda e: self.hide_tip())
+
+        height = PAD * 2 + H
+        self._halo = False
+        self.row_w, self.row_h = width, height
+
+        # 詳細表示
+        if self.detail:
+            fd, fdb = self.fd, self.fdb
+            self._panel = c.create_rectangle(0, PAD + H + 1, 2000, 2000, fill=BG, outline=LINE)
+            LH = fd.metrics("linespace") + 4
+            x0 = PAD + 8
+            c1 = x0 + 8 + fdb.measure("1w") + 12
+            c2 = c1 + fdb.measure("残り100%") + 16
+            yy = PAD + H + 6
+            c.create_line(PAD + 2, yy - 3, width - PAD - 2, yy - 3, fill=LINE)
+
+            self.icon(self.key, x0, yy + LH // 2 - 7)
+            width = max(width, self.text(x0 + 20, yy + LH // 2, self.name, fdb) + PAD + 10); yy += LH
+            tr = today_quota(service.get("five_hour"), service.get("weekly"))
+            tline = today_line(tr)
+            tcol = MUTED if tr.get("unknown") else tr["color"]
+            width = max(width, self.text(x0 + 8, yy + LH // 2, tline, fd, tcol) + PAD + 10); yy += LH
+
+            for wk, wl in WINS:
+                w = service.get(wk) or {}; u = w.get("used_percent"); d = todt(w.get("resets_at"))
+                if wk == "today":
+                    rem = None if tr.get("unknown") else tr["shown"]
+                    d = tr.get("next_day")
+                else:
+                    rem = remaining_window(w)
+                cy = yy + LH // 2
+                self.text(x0 + 8, cy, wl, fdb, DM)
+
+                if wk == "weekly":
+                    cur_col = weekly_color(tr, rem)
+                elif wk == "today":
+                    cur_col = color(rem)
+                else:
+                    cur_col = color(rem)
+
+                bx = c1
+                bw, bh = 48, 10
+                c.create_rectangle(bx, cy - bh / 2, bx + bw, cy + bh / 2, outline="#d0d4dc",
+                                   dash=(2, 2) if rem is None else None)
+                c.create_rectangle(bx + bw + 1, cy - 2, bx + bw + 3, cy + 2, fill="#d0d4dc", outline="#d0d4dc")
+                if rem:
+                    c.create_rectangle(bx + 2, cy - bh / 2 + 2, bx + 2 + (bw - 3) * min(100, rem) / 100,
+                                       cy + bh / 2 - 1, fill=cur_col, width=0)
+                if wk == "weekly":
+                    for di in range(1, 7):
+                        tx = bx + bw * di / 7
+                        c.create_line(tx, cy - bh / 2 + 1, tx, cy + bh / 2 - 1, fill=DM, width=1, dash=(1,2), tags="weekly-separator")
+                    wa = tr.get("week_allowed")
+                    if wa is not None:
+                        px = bx + bw * (100 - min(100.0, max(0.0, wa))) / 100.0
+                        c.create_line(px, cy - bh / 2 - 1, px, cy + bh / 2 + 1, fill="#facc15", width=2, tags="daily-limit")
+                rem_txt = "不明" if rem is None else f"残り{rem:g}%" + (" 持越" if rem > 100 else "")
+                self.text(bx + bw + 8, cy, rem_txt, fdb, DM if rem is None else cur_col)
+                rt = (f"{'日次加算' if wk == 'today' else 'リセット'} {fmt(d)}（{left(d)}）" if d else "リセット 不明")
+                width = max(width, self.text(c2 + 30, cy, rt, fd) + PAD + 10); yy += LH
+
+            a = todt(service.get("as_of")); rc = service.get("reset_count")
+            old = a and (dt.datetime.now(JST) - a).total_seconds() > 6 * 3600
+            line = f"取得 {fmt(a)}（{ago(a)}）" if a else "取得 不明"
+            if old: line += "  古い値"
+            rcs = "リセット回数 " + ("不明" if rc is None else f"{rc}回")
+            self.text(x0 + 8, yy + LH // 2, rcs, fd, DM); yy += LH
+            width = max(width, self.text(x0 + 8, yy + LH // 2, line, fd, "#eab308" if old else DM) + PAD + 10); yy += LH
+
+            fa = todt((self.app.data or {}).get("fetched_at"))
+            msg = "最終更新 " + fmt(fa) + (f"（{ago(fa)}）" if fa else "")
+            if self.app.busy: msg += "  更新中…"
+            if self.app.err: msg += "  更新失敗: " + self.app.err[:60]
+            yy += 4; c.create_line(x0, yy - 2, width - PAD - 6, yy - 2, fill=LINE); yy += 2
+            width = max(width, self.text(x0, yy + LH // 2, msg, fd, "#f87171" if self.app.err else DM) + PAD + 10); yy += LH
+
+            help_tag = "b_help"
+            hx = x0
+            c.create_text(hx, yy + LH // 2, text="説明（計算の見方）↗", anchor="w", font=fd, fill="#60a5fa", tags=help_tag)
+            width = max(width, hx + fd.measure("説明（計算の見方）↗") + PAD + 10)
+            c.tag_bind(help_tag, "<ButtonRelease-1>", lambda e: self.r.after(1, lambda: webbrowser.open(HELP_URL)))
+            yy += LH
+            height = yy + PAD + 2
+            c.coords(self._panel, 0, PAD + H + 1, width - 1, height - 1)
+
+        c.config(width=width, height=height)
+        self.sync_bg()
+        self.r.after(10, self.clamp)
+
+    def show_tip(self, e, text):
+        self.hide_tip()
+        if not text: return
+        self.tip = tk.Toplevel(self.r); self.tip.overrideredirect(True); self.tip.attributes("-topmost", True)
+        tk.Label(self.tip, text=text, bg="#000000", fg="#ffffff", font=self.fs, padx=4, pady=1, wraplength=240, justify="left").pack()
+        self.tip.geometry(f"+{e.x_root + 8}+{e.y_root + 14}")
+
+    def hide_tip(self):
+        if self.tip:
+            self.tip.destroy()
+            self.tip = None
+
+    def hide_15m(self):
+        self.hide_for_seconds(15 * 60, "15分間")
+
+    def hide_until_reset(self):
+        svcs = (self.app.data or {}).get("services", {})
+        service = svcs.get(self.key) or {}
+        now = dt.datetime.now(JST)
+        resets = []
+        for wk in ("five_hour", "weekly"):
+            r = todt((service.get(wk) or {}).get("resets_at"))
+            if r and r > now:
+                resets.append(r)
+        if not resets:
+            self.hide_for_seconds(3600, "1時間（リセット時刻不明のため）")
+            return
+        next_reset = min(resets)
+        secs = int((next_reset - now).total_seconds())
+        if secs <= 0:
+            self.hide_for_seconds(15 * 60, "15分間")
+            return
+        self.hide_for_seconds(secs, f"次回リセット（{fmt(next_reset)}）まで")
+
+    def hide_for_seconds(self, secs, label):
+        if self.hidden_timer_id:
+            try: self.r.after_cancel(self.hidden_timer_id)
+            except Exception: pass
+        self.hidden_timer_id = self.r.after(int(secs * 1000), self.unhide)
+        self.r.withdraw()
+        self.bgw.withdraw()
+        toast(f"{self.name} ウィジェット", f"{label}非表示にしました")
+
+    def unhide(self):
+        self.hidden_timer_id = None
+        self.r.deiconify()
+        self.bgw.deiconify()
+        self.sync_bg()
+        self.draw()
+
+    def close(self):
+        self.save_pos()
+        self.r.destroy()
+        self.bgw.destroy()
+        self.app.on_widget_close(self.key)
+
+    def clamp(self):
+        wa = work_area(self.hwnd())
+        if not wa: return
+        L, T, R, B, _ = wa
+        self.r.update_idletasks()
+        w, h, x, y = self.r.winfo_width(), self.r.winfo_height(), self.r.winfo_x(), self.r.winfo_y()
+        if self.first:
+            self.first = False
+            try:
+                r = wintypes.RECT(); ctypes.windll.user32.SystemParametersInfoW(0x30, 0, ctypes.byref(r), 0)
+                k = self.r.winfo_screenwidth() / (ctypes.windll.user32.GetSystemMetrics(0) or 1)
+                L, T, R, B = (round(v * k) for v in (r.left, r.top, r.right, r.bottom))
+            except Exception: pass
+            offset = 0 if self.key == "claude" else (w + MARGIN + 4)
+            x, y = R - w - MARGIN - offset, T + MARGIN
+            self.r.geometry(f"+{x}+{y}"); self.r.attributes("-alpha", 1.0); self.save_pos(xy=(x, y)); return
+        nx = max(L + MARGIN, min(x, R - w - MARGIN)); ny = max(T + MARGIN, min(y, B - h - MARGIN))
+        home = getattr(self, "home", None)
+        if home:
+            hx, hy, hw, hh, ar, ab = home
+            if self.detail:
+                nx = hx + hw - w if ar else hx; ny = hy + hh - h if ab else hy
+                nx = max(L + MARGIN, min(nx, R - w - MARGIN)); ny = max(T + MARGIN, min(ny, B - h - MARGIN))
+            else:
+                nx, ny = hx, hy; self.home = None
+            if (nx, ny) != (x, y): self.r.geometry(f"+{nx}+{ny}")
+            return
+        if (nx, ny) != (x, y): self.r.geometry(f"+{nx}+{ny}"); self.save_pos(xy=(nx, ny))
+
+
+class AIUsageApp:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.withdraw()  # ルートは非表示
+
+        self.data = None
+        self.busy = False
+        self.status = None
+        self.err = None
+        self.spin = 0
+
+        self.widgets = {}
+        for key, name in SERVICES:
+            self.widgets[key] = ServiceWidget(self, key, name)
+
+        self.reload()
+        self.loop()
+        self.root.after(5000, self.check_resets)
+        if "--test-toast" in sys.argv:
+            toast("AI利用枠ウィジェット", "テスト通知: 表示確認用")
+
+    def load_pos(self, key):
+        try:
+            p = json.load(open(POS, encoding="utf-8"))
+            if isinstance(p, dict):
+                if key in p:
+                    return p[key]
+                if "x" in p and "y" in p:  # 旧単一設定からのマイグレーション
+                    base_x = int(p["x"])
+                    base_y = int(p["y"])
+                    if key == "claude":
+                        return {"x": base_x, "y": base_y}
+                    else:
+                        return {"x": base_x + 254, "y": base_y}
+        except Exception:
+            pass
+        return None
+
+    def save_pos(self, key, x, y, w, h):
+        try:
+            os.makedirs(STATE, exist_ok=True)
+            try:
+                all_pos = json.load(open(POS, encoding="utf-8"))
+                if not isinstance(all_pos, dict): all_pos = {}
+            except Exception:
+                all_pos = {}
+            all_pos[key] = {"x": x, "y": y, "w": w, "h": h}
+            json.dump(all_pos, open(POS, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    def rel_label(self):
+        if self.busy: return "◐◓◑◒"[self.spin % 4]
+        return {"ok": "✓", "ng": "✗"}.get(self.status, "↻")
+
+    def loop(self):
+        self.reload()
+        self.root.after(5 * 60 * 1000, self.loop)
+
+    def reload(self):
+        try:
+            self.data = json.load(open(DATA, encoding="utf-8"))
+            try: export_browser_data(self.data)
+            except (OSError, ValueError, TypeError): pass
+        except Exception:
+            self.data = None
+        for w in self.widgets.values():
+            w.draw()
 
     def check_resets(self):
-        """保存された resets_at を過ぎたら1回だけ通知（遅れは6時間まで）。その後に値を取り直す"""
         try:
             try: done = json.load(open(NOTIFIED, encoding="utf-8"))
             except Exception: done = {}
@@ -370,11 +736,11 @@ class W:
                 done = {k: v for k, v in done.items() if v >= cut}
                 os.makedirs(STATE, exist_ok=True); json.dump(done, open(NOTIFIED, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
             if fired and not self.busy:
-                # Claude はping 1回（↻と同じ）。Codex だけなら collector のみ（Claude ping なし）
-                if "claude" in fired: self.r.after(60 * 1000, self.refresh)
-                else: self.r.after(60 * 1000, self.fetch_codex)
-        except Exception: pass
-        self.r.after(60 * 1000, self.check_resets)
+                if "claude" in fired: self.root.after(60 * 1000, self.refresh)
+                else: self.root.after(60 * 1000, self.fetch_codex)
+        except Exception:
+            pass
+        self.root.after(60 * 1000, self.check_resets)
 
     def fetch_codex(self):
         if self.busy: return
@@ -384,175 +750,23 @@ class W:
                 subprocess.run([py if os.path.exists(py) else sys.executable, os.path.join(os.path.dirname(HERE), "collector", "collector.py"),
                                 "--reason", "widget-reset"], timeout=180, creationflags=0x08000000, stdin=subprocess.DEVNULL, capture_output=True)
             except Exception: pass
-            self.r.after(0, self.reload)
+            self.root.after(0, self.reload)
         threading.Thread(target=run, daemon=True).start()
 
-    def loop(self): self.reload(); self.r.after(5 * 60 * 1000, self.loop)
-    def reload(self):
-        try:
-            self.data = json.load(open(DATA, encoding="utf-8"))
-            try: export_browser_data(self.data)
-            except (OSError, ValueError, TypeError): pass
-        except Exception: self.data = None
-        self.draw()
-
-    def icon(self, key, x, y):
-        c = self.c; cx, cy = x + 7, y + 7
-        if key == "claude":
-            import math
-            for a in range(0, 180, 30):
-                r = math.radians(a); dx, dy = 6.5 * math.cos(r), 6.5 * math.sin(r)
-                c.create_line(cx - dx, cy - dy, cx + dx, cy + dy, fill="#D97757", width=2, capstyle="round")
-        else:
-            c.create_rectangle(x, y, x + 14, y + 14, fill="#000000", outline="#6b7280")
-            c.create_line(x + 3, y + 4, x + 6, y + 7, x + 3, y + 10, fill="#ffffff", width=1.6)
-            c.create_line(x + 7.5, y + 10.5, x + 11, y + 10.5, fill="#ffffff", width=1.6)
-        return x + 14
-
-    def text(self, x, y, s, fnt=None, fill=FG):
-        fnt = fnt or self.f
-        if getattr(self, "_halo", False):  # 透明背景でも読めるよう黒い縁取り
-            for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
-                self.c.create_text(x + ox, y + oy, text=s, anchor="w", font=fnt, fill=HALO)
-        self.c.create_text(x, y, text=s, anchor="w", font=fnt, fill=fill)
-        return x + fnt.measure(s)
-
-    def draw(self):
-        c = self.c; c.delete("all"); self._halo = True
-        svcs = (self.data or {}).get("services", {})
-        H = 108
-        width = 492
-        for column, (key, name) in enumerate(SERVICES):
-            x = PAD + 4 + column * 242
-            self.icon(key, x, PAD + 5)
-            self.text(x + 20, PAD + 12, "Claude Code" if key == "claude" else name, self.f)
-            service = svcs.get(key) or {}
-            today = today_quota(service.get("five_hour"), service.get("weekly"))
-            for row, (window, label) in enumerate(WINS):
-                rem = (None if today.get("unknown") else today["shown"]) if window == "today" else remaining_window(service.get(window))
-                cy = PAD + 37 + row * 24
-                self.text(x, cy, label, self.fs, DM)
-                bx, bw, bh = x + 40, 100, 12
-                c.create_rectangle(bx, cy - bh/2, bx+bw, cy+bh/2, outline=DM, dash=(2,2) if rem is None else None)
-                if rem is not None and rem > 0:
-                    c.create_rectangle(bx+1, cy-bh/2+1, bx+1+(bw-2)*min(100,rem)/100, cy+bh/2-1, fill=rem_color(rem), width=0)
-                if window == "weekly":
-                    for day in range(1, 7):
-                        tx = bx + bw * day / 7
-                        c.create_line(tx, cy-bh/2+1, tx, cy+bh/2-1, fill=DM, width=1, dash=(1,2), tags="weekly-separator")
-                if window == "weekly" and not today.get("unknown"):
-                    px = bx + bw * (100 - today["week_allowed"]) / 100
-                    c.create_line(px, cy-bh/2-2, px, cy+bh/2+2, fill="#facc15", width=2, tags="daily-limit")
-                text = "不明" if rem is None else f"{rem:g}%" + (" 持越" if rem > 100 else "")
-                self.text(bx+bw+6, cy, text, self.fs, rem_color(rem))
-        y = PAD + 12
-        x = width - 42
-        for tag, label, fn in (("b_det", "▲" if self.detail else "▼", self.toggle), ("b_rel", self.rel_label(), self.refresh)):
-            c.create_rectangle(x, PAD + 3, x + 16, PAD + 21, outline=DM, fill=BG, tags=tag)
-            c.create_text(x + 8, y, text=label, font=self.fs, fill=FG, tags=tag)
-            c.tag_bind(tag, "<ButtonRelease-1>", lambda e, fn=fn: self.r.after(1, fn))
-            if tag == "b_rel":
-                c.tag_bind(tag, "<Enter>", lambda e: self.show_tip(e)); c.tag_bind(tag, "<Leave>", lambda e: self.hide_tip())
-            x += 19
-        height = PAD * 2 + H
-        self._halo = False
-        self.row_w, self.row_h = width, height
-        if self.detail:
-            fd, fdb = self.fd, self.fdb
-            self._panel = c.create_rectangle(0, PAD + H + 1, 2000, 2000, fill=BG, outline=LINE)
-            LH = fd.metrics("linespace") + 4
-            x0 = PAD + 10; c1 = x0 + 8 + fdb.measure("1w") + 12
-            c2 = c1 + fdb.measure("残り100%") + 16
-            yy = PAD + H + 6
-            c.create_line(PAD + 2, yy - 3, width - PAD - 2, yy - 3, fill=LINE)
-            fa = todt((self.data or {}).get("fetched_at"))
-            for si, (key, name) in enumerate(SERVICES):
-                s = svcs.get(key) or {}
-                if si: yy += 4; c.create_line(x0, yy - 2, max(width, 300) - PAD - 6, yy - 2, fill=LINE); yy += 4
-                self.icon(key, x0, yy + LH // 2 - 7)
-                width = max(width, self.text(x0 + 20, yy + LH // 2, name, fdb) + PAD + 10); yy += LH
-                tr = today_quota(s.get("five_hour"), s.get("weekly"))
-                tline = today_line(tr)
-                tcol = MUTED if tr.get("unknown") else tr["color"]
-                width = max(width, self.text(x0 + 8, yy + LH // 2, tline, fd, tcol) + PAD + 10); yy += LH
-                for wk, wl in WINS:
-                    w = s.get(wk) or {}; u = w.get("used_percent"); d = todt(w.get("resets_at"))
-                    if wk == "today":
-                        rem = None if tr.get("unknown") else tr["shown"]
-                        d = tr.get("next_day")
-                    else:
-                        rem = remaining_window(w)
-                    cy = yy + LH // 2
-                    self.text(x0 + 8, cy, wl, fdb, DM)
-                    # 小さい電池バー（週は目盛り＋ペース線）
-                    bx = c1
-                    bw, bh = 48, 10
-                    c.create_rectangle(bx, cy - bh / 2, bx + bw, cy + bh / 2, outline="#d0d4dc",
-                                       dash=(2, 2) if rem is None else None)
-                    c.create_rectangle(bx + bw + 1, cy - 2, bx + bw + 3, cy + 2, fill="#d0d4dc", outline="#d0d4dc")
-                    if rem:
-                        c.create_rectangle(bx + 2, cy - bh / 2 + 2, bx + 2 + (bw - 3) * min(100, rem) / 100,
-                                           cy + bh / 2 - 1, fill=color(rem), width=0)
-                    if wk == "weekly":
-                        for di in range(1, 7):
-                            tx = bx + bw * di / 7
-                            c.create_line(tx, cy - bh / 2 + 1, tx, cy + bh / 2 - 1, fill=DM, width=1, dash=(1,2), tags="weekly-separator")
-                        wa = tr.get("week_allowed")
-                        if wa is not None:
-                            px = bx + bw * (100 - min(100.0, max(0.0, wa))) / 100.0
-                            c.create_line(px, cy - bh / 2 - 1, px, cy + bh / 2 + 1, fill="#facc15", width=2, tags="daily-limit")
-                    rem_txt = "不明" if rem is None else f"残り{rem:g}%" + (" 持越" if rem > 100 else "")
-                    self.text(bx + bw + 8, cy, rem_txt, fdb, DM if rem is None else color(rem))
-                    rt = (f"{'日次加算' if wk == 'today' else 'リセット'} {fmt(d)}（{left(d)}）" if d else "リセット 不明")
-                    width = max(width, self.text(c2 + 40, cy, rt, fd) + PAD + 10); yy += LH
-                a = todt(s.get("as_of")); rc = s.get("reset_count")
-                old = a and (dt.datetime.now(JST) - a).total_seconds() > 6 * 3600
-                line = f"取得 {fmt(a)}（{ago(a)}）" if a else "取得 不明"
-                if old: line += "  古い値"
-                rcs = "リセット回数 " + ("不明" if rc is None else f"{rc}回")
-                self.text(x0 + 8, yy + LH // 2, rcs, fd, DM); yy += LH
-                width = max(width, self.text(x0 + 8, yy + LH // 2, line, fd, "#eab308" if old else DM) + PAD + 10); yy += LH
-            msg = "最終更新 " + fmt(fa) + (f"（{ago(fa)}）" if fa else "")
-            if self.busy: msg += "  更新中…"
-            if self.err: msg += "  更新失敗: " + self.err[:60]
-            yy += 4; c.create_line(x0, yy - 2, width - PAD - 6, yy - 2, fill=LINE); yy += 2
-            width = max(width, self.text(x0, yy + LH // 2, msg, fd, "#f87171" if self.err else DM) + PAD + 10); yy += LH
-            # 説明リンク（クリックでブラウザ。自動では開かない）
-            help_tag = "b_help"
-            hx = x0
-            c.create_text(hx, yy + LH // 2, text="説明（計算の見方）↗", anchor="w", font=fd, fill="#60a5fa", tags=help_tag)
-            width = max(width, hx + fd.measure("説明（計算の見方）↗") + PAD + 10)
-            c.tag_bind(help_tag, "<ButtonRelease-1>", lambda e: self.r.after(1, lambda: webbrowser.open(HELP_URL)))
-            yy += LH
-            height = yy + PAD + 2
-            c.coords(self._panel, 0, PAD + H + 1, width - 1, height - 1)
-        c.config(width=width, height=height)
-        self.sync_bg()
-        self.r.after(10, self.clamp)
-
-    def rel_label(self):
-        if self.busy: return "◐◓◑◒"[self.spin % 4]
-        return {"ok": "✓", "ng": "✗"}.get(self.status, "↻")
-
-    def show_tip(self, e):
-        self.hide_tip()
-        t = "更新中…" if self.busy else ("更新失敗: " + self.err) if self.err else "今すぐ取得（Claude・Codex）"
-        self.tip = tk.Toplevel(self.r); self.tip.overrideredirect(True); self.tip.attributes("-topmost", True)
-        tk.Label(self.tip, text=t, bg="#000000", fg="#ffffff", font=self.fs, padx=4, pady=1, wraplength=360, justify="left").pack()
-        self.tip.geometry(f"+{e.x_root + 8}+{e.y_root + 14}")
-
-    def hide_tip(self):
-        if self.tip: self.tip.destroy(); self.tip = None
-
     def refresh(self):
-        """↻: 裏で Claude ping + Codex 取得 + push を実行し、終わったら表示を読み直す"""
         if self.busy: return
-        self.busy = True; self.status = None; self.err = None; self.draw(); self.animate()
+        self.busy = True; self.status = None; self.err = None
+        for w in self.widgets.values():
+            w.draw()
+        self.animate()
         threading.Thread(target=self._work, daemon=True).start()
 
     def animate(self):
         if not self.busy: return
-        self.spin += 1; self.draw(); self.r.after(250, self.animate)
+        self.spin += 1
+        for w in self.widgets.values():
+            w.draw()
+        self.root.after(250, self.animate)
 
     def _work(self):
         err = None
@@ -579,60 +793,37 @@ class W:
             err = "タイムアウト"
         except Exception as e:
             err = str(e)
-        self.r.after(0, self._done, err)
+        self.root.after(0, self._done, err)
 
     def _done(self, err):
         self.busy = False; self.err = err; self.status = "ng" if err else "ok"
         self.reload()
-        self.r.after(3000 if not err else 8000, self._clear_status)
+        self.root.after(3000 if not err else 8000, self._clear_status)
 
     def _clear_status(self):
-        if not self.busy: self.status = None; self.draw()
+        if not self.busy:
+            self.status = None
+            for w in self.widgets.values():
+                w.draw()
 
-    def close(self):
-        self.save_pos(); self.r.destroy()
+    def on_widget_close(self, key):
+        if key in self.widgets:
+            del self.widgets[key]
+        if not self.widgets:
+            self.root.quit()
 
-    def clamp(self):
-        """画面下端・右端からはみ出したら作業領域内に戻す（下端に付けていれば上に伸びる）"""
-        wa = work_area(self.hwnd())
-        if not wa: return
-        L, T, R, B, _ = wa
-        self.r.update_idletasks()
-        w, h, x, y = self.r.winfo_width(), self.r.winfo_height(), self.r.winfo_x(), self.r.winfo_y()
-        if self.first:  # 保存位置なし: メインモニターの作業領域の右上
-            self.first = False
-            try:
-                r = wintypes.RECT(); ctypes.windll.user32.SystemParametersInfoW(0x30, 0, ctypes.byref(r), 0)
-                k = self.r.winfo_screenwidth() / (ctypes.windll.user32.GetSystemMetrics(0) or 1)
-                L, T, R, B = (round(v * k) for v in (r.left, r.top, r.right, r.bottom))
-            except Exception: pass
-            x, y = R - w - MARGIN, T + MARGIN
-            self.r.geometry(f"+{x}+{y}"); self.r.attributes("-alpha", 1.0); self.save_pos(xy=(x, y)); return
-        # 保存位置が見える範囲外（モニター構成が変わった等）なら、いちばん近いモニターの作業領域に収める
-        nx = max(L + MARGIN, min(x, R - w - MARGIN)); ny = max(T + MARGIN, min(y, B - h - MARGIN))
-        home = getattr(self, "home", None)
-        if home:
-            hx, hy, hw, hh, ar, ab = home
-            if self.detail:
-                # 右寄せなら左へ、下寄せなら上へ伸ばす。ずらした位置は保存しない
-                nx = hx + hw - w if ar else hx; ny = hy + hh - h if ab else hy
-                nx = max(L + MARGIN, min(nx, R - w - MARGIN)); ny = max(T + MARGIN, min(ny, B - h - MARGIN))
-            else:
-                nx, ny = hx, hy; self.home = None
-            if (nx, ny) != (x, y): self.r.geometry(f"+{nx}+{ny}")
-            return
-        if (nx, ny) != (x, y): self.r.geometry(f"+{nx}+{ny}"); self.save_pos(xy=(nx, ny))
 
 def single_instance():
     try:
         k = ctypes.windll.kernel32
         k.CreateMutexW.restype = wintypes.HANDLE
         h = k.CreateMutexW(None, False, "Local\\AIUsageDashboardWidget")
-        return h if k.GetLastError() != 183 else None  # ERROR_ALREADY_EXISTS
+        return h if k.GetLastError() != 183 else None
     except Exception:
         return True
 
 if __name__ == "__main__":
     _mutex = single_instance()
     if _mutex:
-        W().r.mainloop()
+        app = AIUsageApp()
+        app.root.mainloop()
