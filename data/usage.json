@@ -1,19 +1,19 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-01T10:21:09+09:00",
+  "fetched_at": "2026-11-01T10:41:44+09:00",
   "services": {
     "claude": {
       "five_hour": {
-        "used_percent": 1.0,
+        "used_percent": 15.0,
         "resets_at": "2026-11-01T12:00:00+09:00"
       },
       "weekly": {
-        "used_percent": 84.0,
+        "used_percent": 86.0,
         "resets_at": "2026-11-02T09:00:00+09:00"
       },
       "reset_count": null,
       "source": "Claude Code statusline (最後に Claude Code を使った時点の値)",
-      "as_of": "2026-11-01T10:05:38+09:00",
+      "as_of": "2026-11-01T10:21:10+09:00",
       "error": null,
       "day_track": {
         "week_start": "2026-10-26T09:00:00+09:00",
@@ -26,25 +26,25 @@
           "6": 66.0,
           "7": 84.0
         },
-        "last_weekly_used": 84.0
+        "last_weekly_used": 86.0
       }
     },
     "codex": {
       "five_hour": {
-        "used_percent": 52.0,
-        "resets_at": "2026-11-01T12:15:57+09:00"
+        "used_percent": 57.0,
+        "resets_at": "2026-11-01T12:15:58+09:00"
       },
       "weekly": {
         "used_percent": 52.0,
-        "resets_at": "2026-11-05T01:40:35+09:00"
+        "resets_at": "2026-11-05T01:40:36+09:00"
       },
       "reset_count": 2,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-01T10:21:09+09:00",
+      "as_of": "2026-11-01T10:41:44+09:00",
       "error": null,
       "reset_count_expires_at": "2026-11-07T06:37:11+09:00",
       "day_track": {
-        "week_start": "2026-10-29T01:40:35+09:00",
+        "week_start": "2026-10-29T01:40:36+09:00",
         "day_start_used": {
           "1": 0.0,
           "2": 40.0,
