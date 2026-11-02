@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-02T18:31:58+09:00",
+  "fetched_at": "2026-11-02T18:42:27+09:00",
   "services": {
     "claude": {
       "five_hour": {
@@ -25,16 +25,16 @@
     },
     "codex": {
       "five_hour": {
-        "used_percent": 24.0,
+        "used_percent": 31.0,
         "resets_at": "2026-11-02T22:03:57+09:00"
       },
       "weekly": {
-        "used_percent": 74.0,
+        "used_percent": 75.0,
         "resets_at": "2026-11-05T01:40:35+09:00"
       },
       "reset_count": 3,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-02T18:31:58+09:00",
+      "as_of": "2026-11-02T18:42:27+09:00",
       "error": null,
       "reset_count_expires_at": "2026-11-07T06:37:11+09:00",
       "day_track": {
@@ -46,7 +46,7 @@
           "4": 44.0,
           "5": 55.0
         },
-        "last_weekly_used": 74.0
+        "last_weekly_used": 75.0
       }
     }
   }
