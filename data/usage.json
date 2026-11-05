@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-05T21:17:57+09:00",
+  "fetched_at": "2026-11-05T22:52:53+09:00",
   "services": {
     "claude": {
       "five_hour": {
-        "used_percent": 10.0,
+        "used_percent": 12.0,
         "resets_at": "2026-11-06T00:20:00+09:00"
       },
       "weekly": {
@@ -13,7 +13,7 @@
       },
       "reset_count": null,
       "source": "Claude Code statusline (最後に Claude Code を使った時点の値)",
-      "as_of": "2026-11-05T20:55:25+09:00",
+      "as_of": "2026-11-05T21:17:44+09:00",
       "error": null,
       "day_track": {
         "week_start": "2026-11-02T09:00:00+09:00",
@@ -29,7 +29,7 @@
     "codex": {
       "five_hour": {
         "used_percent": 0.0,
-        "resets_at": "2026-11-06T02:17:46+09:00"
+        "resets_at": "2026-11-06T03:52:43+09:00"
       },
       "weekly": {
         "used_percent": 24.0,
@@ -37,7 +37,7 @@
       },
       "reset_count": 2,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-05T21:17:46+09:00",
+      "as_of": "2026-11-05T22:52:44+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-01T03:56:01+09:00",
       "day_track": {
@@ -50,7 +50,7 @@
       }
     },
     "antigravity": {
-      "as_of": "2026-11-05T21:17:46+09:00",
+      "as_of": "2026-11-05T22:52:44+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini 3.8 Flash (Medium)",
       "totals": {
@@ -93,8 +93,8 @@
           "key": "agy_gemini_models",
           "name": "Gemini Models",
           "five_hour": {
-            "used_percent": 9.0,
-            "remain_percent": 91.0,
+            "used_percent": 8.0,
+            "remain_percent": 92.0,
             "resets_at": "2026-11-06T01:37:04+09:00",
             "prompts": 6,
             "steps": 185,
@@ -140,7 +140,7 @@
           "five_hour": {
             "used_percent": 0.0,
             "remain_percent": 100.0,
-            "resets_at": "2026-11-06T02:17:52+09:00",
+            "resets_at": "2026-11-06T03:52:50+09:00",
             "prompts": 0,
             "steps": 0,
             "input_tokens": 0,
@@ -205,8 +205,8 @@
             "total_tokens": 1053268
           },
           "weekly": {
-            "used_percent": 56.0,
-            "remain_percent": 44.0,
+            "used_percent": 55.0,
+            "remain_percent": 45.0,
             "resets_at": "2026-11-09T21:59:35+09:00",
             "prompts": 36,
             "steps": 650,
@@ -219,9 +219,10 @@
           "day_track": {
             "week_start": "2026-11-02T21:59:35+09:00",
             "day_start_used": {
-              "3": null
+              "3": null,
+              "4": 56.0
             },
-            "last_weekly_used": 56.0
+            "last_weekly_used": 55.0
           }
         }
       ],
