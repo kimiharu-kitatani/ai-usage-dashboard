@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-06T02:17:37+09:00",
+  "fetched_at": "2026-11-06T02:28:48+09:00",
   "services": {
     "claude": {
       "five_hour": {
-        "used_percent": 27.0,
+        "used_percent": 29.0,
         "resets_at": "2026-11-06T05:30:00+09:00"
       },
       "weekly": {
@@ -13,7 +13,7 @@
       },
       "reset_count": null,
       "source": "Claude Code statusline (最後に Claude Code を使った時点の値)",
-      "as_of": "2026-11-06T02:07:20+09:00",
+      "as_of": "2026-11-06T02:17:31+09:00",
       "error": null,
       "day_track": {
         "week_start": "2026-11-02T09:00:00+09:00",
@@ -37,7 +37,7 @@
       },
       "reset_count": 2,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-06T02:17:30+09:00",
+      "as_of": "2026-11-06T02:28:42+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-01T03:56:01+09:00",
       "day_track": {
@@ -50,7 +50,7 @@
       }
     },
     "antigravity": {
-      "as_of": "2026-11-06T02:17:30+09:00",
+      "as_of": "2026-11-06T02:28:42+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini 3.8 Flash (Medium)",
       "totals": {
@@ -80,12 +80,12 @@
           "used_percent": null,
           "remain_percent": null,
           "resets_at": null,
-          "prompts": 365,
-          "steps": 5144,
-          "input_tokens": 35018053,
-          "output_tokens": 2617496,
-          "cache_read_tokens": 593379628,
-          "total_tokens": 37635549
+          "prompts": 364,
+          "steps": 5120,
+          "input_tokens": 34806298,
+          "output_tokens": 2598043,
+          "cache_read_tokens": 589654227,
+          "total_tokens": 37404341
         }
       },
       "models": [
@@ -118,12 +118,12 @@
             "used_percent": 23.0,
             "remain_percent": 77.0,
             "resets_at": "2026-11-10T06:54:21+09:00",
-            "prompts": 343,
-            "steps": 5034,
-            "input_tokens": 34381927,
-            "output_tokens": 2539546,
-            "cache_read_tokens": 581182514,
-            "total_tokens": 36921473
+            "prompts": 342,
+            "steps": 5010,
+            "input_tokens": 34170172,
+            "output_tokens": 2520093,
+            "cache_read_tokens": 577457113,
+            "total_tokens": 36690265
           },
           "last_used_at": "2026-11-06T01:50:17+09:00",
           "day_track": {
@@ -140,7 +140,7 @@
           "five_hour": {
             "used_percent": 0.0,
             "remain_percent": 100.0,
-            "resets_at": "2026-11-06T07:17:35+09:00",
+            "resets_at": "2026-11-06T07:28:46+09:00",
             "prompts": 0,
             "steps": 0,
             "input_tokens": 0,
