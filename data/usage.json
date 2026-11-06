@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-06T15:22:10+09:00",
+  "fetched_at": "2026-11-06T18:21:17+09:00",
   "services": {
     "claude": {
       "five_hour": {
-        "used_percent": 38.0,
-        "resets_at": "2026-11-06T17:10:00+09:00"
+        "used_percent": null,
+        "resets_at": null
       },
       "weekly": {
         "used_percent": 53.0,
@@ -13,8 +13,8 @@
       },
       "reset_count": null,
       "source": "Claude Code statusline (最後に Claude Code を使った時点の値)",
-      "as_of": "2026-11-06T15:09:13+09:00",
-      "error": null,
+      "as_of": "2026-11-06T15:22:03+09:00",
+      "error": "5時間枠は記録後にリセット済み（次回利用時に更新）",
       "day_track": {
         "week_start": "2026-11-02T09:00:00+09:00",
         "day_start_used": {
@@ -30,19 +30,19 @@
     "codex": {
       "five_hour": {
         "used_percent": 0.0,
-        "resets_at": "2026-11-06T20:22:02+09:00"
+        "resets_at": "2026-11-06T23:19:49+09:00"
       },
       "weekly": {
         "used_percent": 48.0,
-        "resets_at": "2026-11-10T08:05:14+09:00"
+        "resets_at": "2026-11-10T08:05:13+09:00"
       },
       "reset_count": 2,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-06T15:22:02+09:00",
+      "as_of": "2026-11-06T18:21:07+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-01T03:56:01+09:00",
       "day_track": {
-        "week_start": "2026-11-03T08:05:14+09:00",
+        "week_start": "2026-11-03T08:05:13+09:00",
         "day_start_used": {
           "1": 0.0,
           "3": 16.0,
@@ -52,7 +52,7 @@
       }
     },
     "antigravity": {
-      "as_of": "2026-11-06T15:22:02+09:00",
+      "as_of": "2026-11-06T18:21:07+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini 3.8 Flash (Low)",
       "totals": {
@@ -60,12 +60,12 @@
           "used_percent": null,
           "remain_percent": null,
           "resets_at": null,
-          "prompts": 14,
-          "steps": 358,
-          "input_tokens": 1910653,
-          "output_tokens": 111766,
-          "cache_read_tokens": 40280787,
-          "total_tokens": 2022419
+          "prompts": 4,
+          "steps": 41,
+          "input_tokens": 98242,
+          "output_tokens": 6989,
+          "cache_read_tokens": 4200810,
+          "total_tokens": 105231
         },
         "today": {
           "used_percent": null,
@@ -95,15 +95,15 @@
           "key": "agy_gemini_models",
           "name": "Gemini Models",
           "five_hour": {
-            "used_percent": 8.0,
-            "remain_percent": 92.0,
-            "resets_at": "2026-11-06T17:36:21+09:00",
-            "prompts": 14,
-            "steps": 358,
-            "input_tokens": 1910653,
-            "output_tokens": 111766,
-            "cache_read_tokens": 40280787,
-            "total_tokens": 2022419
+            "used_percent": 0.0,
+            "remain_percent": 100.0,
+            "resets_at": "2026-11-06T23:21:15+09:00",
+            "prompts": 4,
+            "steps": 41,
+            "input_tokens": 98242,
+            "output_tokens": 6989,
+            "cache_read_tokens": 4200810,
+            "total_tokens": 105231
           },
           "today": {
             "used_percent": null,
@@ -143,7 +143,7 @@
           "five_hour": {
             "used_percent": 0.0,
             "remain_percent": 100.0,
-            "resets_at": "2026-11-06T20:22:08+09:00",
+            "resets_at": "2026-11-06T23:21:15+09:00",
             "prompts": 0,
             "steps": 0,
             "input_tokens": 0,
