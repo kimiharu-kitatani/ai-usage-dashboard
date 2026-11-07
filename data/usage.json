@@ -1,19 +1,19 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-07T20:31:04+09:00",
+  "fetched_at": "2026-11-07T20:41:23+09:00",
   "services": {
     "claude": {
       "five_hour": {
-        "used_percent": 28.0,
+        "used_percent": 33.0,
         "resets_at": "2026-11-07T23:40:00+09:00"
       },
       "weekly": {
-        "used_percent": 67.0,
+        "used_percent": 68.0,
         "resets_at": "2026-11-09T09:00:00+09:00"
       },
       "reset_count": null,
       "source": "Claude Code statusline (最後に Claude Code を使った時点の値)",
-      "as_of": "2026-11-07T20:18:59+09:00",
+      "as_of": "2026-11-07T20:30:59+09:00",
       "error": null,
       "day_track": {
         "week_start": "2026-11-02T09:00:00+09:00",
@@ -25,13 +25,13 @@
           "5": 45.0,
           "6": 59.0
         },
-        "last_weekly_used": 67.0
+        "last_weekly_used": 68.0
       }
     },
     "codex": {
       "five_hour": {
         "used_percent": 0.0,
-        "resets_at": "2026-11-08T01:30:57+09:00"
+        "resets_at": "2026-11-08T01:41:13+09:00"
       },
       "weekly": {
         "used_percent": 57.0,
@@ -39,7 +39,7 @@
       },
       "reset_count": 2,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-07T20:30:58+09:00",
+      "as_of": "2026-11-07T20:41:14+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-01T03:56:01+09:00",
       "day_track": {
@@ -54,7 +54,7 @@
       }
     },
     "antigravity": {
-      "as_of": "2026-11-07T20:30:58+09:00",
+      "as_of": "2026-11-07T20:41:14+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini 3.8 Flash (Medium)",
       "totals": {
@@ -213,7 +213,7 @@
           "weekly": {
             "used_percent": 0.0,
             "remain_percent": 100.0,
-            "resets_at": "2026-11-14T20:31:02+09:00",
+            "resets_at": "2026-11-14T20:41:20+09:00",
             "prompts": 47,
             "steps": 767,
             "input_tokens": 7079457,
@@ -223,7 +223,7 @@
           },
           "last_used_at": "2026-11-06T01:49:33+09:00",
           "day_track": {
-            "week_start": "2026-11-07T20:31:02+09:00",
+            "week_start": "2026-11-07T20:41:20+09:00",
             "day_start_used": {
               "1": 0.0
             },
