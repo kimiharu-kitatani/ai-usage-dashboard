@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-07T12:22:24+09:00",
+  "fetched_at": "2026-11-07T12:33:05+09:00",
   "services": {
     "claude": {
       "five_hour": {
-        "used_percent": 21.0,
+        "used_percent": 24.0,
         "resets_at": "2026-11-07T16:00:00+09:00"
       },
       "weekly": {
@@ -13,7 +13,7 @@
       },
       "reset_count": null,
       "source": "Claude Code statusline (最後に Claude Code を使った時点の値)",
-      "as_of": "2026-11-07T12:11:11+09:00",
+      "as_of": "2026-11-07T12:22:17+09:00",
       "error": null,
       "day_track": {
         "week_start": "2026-11-02T09:00:00+09:00",
@@ -31,7 +31,7 @@
     "codex": {
       "five_hour": {
         "used_percent": 0.0,
-        "resets_at": "2026-11-07T17:22:16+09:00"
+        "resets_at": "2026-11-07T17:32:57+09:00"
       },
       "weekly": {
         "used_percent": 57.0,
@@ -39,7 +39,7 @@
       },
       "reset_count": 2,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-07T12:22:16+09:00",
+      "as_of": "2026-11-07T12:32:57+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-01T03:56:01+09:00",
       "day_track": {
@@ -54,7 +54,7 @@
       }
     },
     "antigravity": {
-      "as_of": "2026-11-07T12:22:16+09:00",
+      "as_of": "2026-11-07T12:32:57+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini 3.8 Flash (Medium)",
       "totals": {
@@ -62,34 +62,34 @@
           "used_percent": null,
           "remain_percent": null,
           "resets_at": null,
-          "prompts": 22,
-          "steps": 424,
-          "input_tokens": 1519960,
-          "output_tokens": 143773,
-          "cache_read_tokens": 47644263,
-          "total_tokens": 1663733
+          "prompts": 19,
+          "steps": 405,
+          "input_tokens": 1472435,
+          "output_tokens": 130359,
+          "cache_read_tokens": 44030765,
+          "total_tokens": 1602794
         },
         "today": {
           "used_percent": null,
           "remain_percent": null,
           "resets_at": null,
-          "prompts": 32,
-          "steps": 712,
-          "input_tokens": 2423994,
-          "output_tokens": 257374,
-          "cache_read_tokens": 86731305,
-          "total_tokens": 2681368
+          "prompts": 33,
+          "steps": 737,
+          "input_tokens": 2489816,
+          "output_tokens": 269563,
+          "cache_read_tokens": 89898364,
+          "total_tokens": 2759379
         },
         "weekly": {
           "used_percent": null,
           "remain_percent": null,
           "resets_at": null,
-          "prompts": 423,
-          "steps": 6645,
-          "input_tokens": 39108421,
-          "output_tokens": 3090200,
-          "cache_read_tokens": 788186455,
-          "total_tokens": 42198621
+          "prompts": 424,
+          "steps": 6670,
+          "input_tokens": 39174243,
+          "output_tokens": 3102389,
+          "cache_read_tokens": 791353514,
+          "total_tokens": 42276632
         }
       },
       "models": [
@@ -97,45 +97,45 @@
           "key": "agy_gemini_models",
           "name": "Gemini Models",
           "five_hour": {
-            "used_percent": 4.0,
-            "remain_percent": 96.0,
+            "used_percent": 5.0,
+            "remain_percent": 95.0,
             "resets_at": "2026-11-07T17:06:09+09:00",
-            "prompts": 20,
-            "steps": 409,
-            "input_tokens": 1164529,
-            "output_tokens": 135167,
-            "cache_read_tokens": 42938007,
-            "total_tokens": 1299696
+            "prompts": 17,
+            "steps": 390,
+            "input_tokens": 1117004,
+            "output_tokens": 121753,
+            "cache_read_tokens": 39324509,
+            "total_tokens": 1238757
           },
           "today": {
             "used_percent": null,
             "remain_percent": null,
             "resets_at": null,
-            "prompts": 30,
-            "steps": 697,
-            "input_tokens": 2068563,
-            "output_tokens": 248768,
-            "cache_read_tokens": 82025049,
-            "total_tokens": 2317331
+            "prompts": 31,
+            "steps": 722,
+            "input_tokens": 2134385,
+            "output_tokens": 260957,
+            "cache_read_tokens": 85192108,
+            "total_tokens": 2395342
           },
           "weekly": {
-            "used_percent": 1.0,
-            "remain_percent": 99.0,
+            "used_percent": 2.0,
+            "remain_percent": 98.0,
             "resets_at": "2026-11-14T12:06:09+09:00",
-            "prompts": 399,
-            "steps": 6520,
-            "input_tokens": 38116864,
-            "output_tokens": 3003644,
-            "cache_read_tokens": 771283085,
-            "total_tokens": 41120508
+            "prompts": 400,
+            "steps": 6545,
+            "input_tokens": 38182686,
+            "output_tokens": 3015833,
+            "cache_read_tokens": 774450144,
+            "total_tokens": 41198519
           },
-          "last_used_at": "2026-11-07T12:21:44+09:00",
+          "last_used_at": "2026-11-07T12:26:08+09:00",
           "day_track": {
             "week_start": "2026-11-07T12:06:09+09:00",
             "day_start_used": {
               "1": 0.0
             },
-            "last_weekly_used": 1.0
+            "last_weekly_used": 2.0
           }
         },
         {
@@ -213,7 +213,7 @@
           "weekly": {
             "used_percent": 0.0,
             "remain_percent": 100.0,
-            "resets_at": "2026-11-14T12:22:22+09:00",
+            "resets_at": "2026-11-14T12:33:03+09:00",
             "prompts": 47,
             "steps": 767,
             "input_tokens": 7079457,
@@ -223,7 +223,7 @@
           },
           "last_used_at": "2026-11-06T01:49:33+09:00",
           "day_track": {
-            "week_start": "2026-11-07T12:22:22+09:00",
+            "week_start": "2026-11-07T12:33:03+09:00",
             "day_start_used": {
               "1": 0.0
             },
