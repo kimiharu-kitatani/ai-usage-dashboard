@@ -309,6 +309,7 @@ body.expanded #top3{display:block}
   /* スワイプトラック */
   .swipe-track {
     display: flex !important;
+    position: relative !important;
     overflow-x: auto !important;
     scroll-snap-type: x mandatory !important;
     scroll-behavior: smooth !important;
@@ -987,13 +988,24 @@ function initSwipeTabs() {
   const panes = document.querySelectorAll(".swipe-pane");
   if (!track || !tabs.length || !panes.length) return;
 
+  let isClickScrolling = false;
+  let clickTimeout = null;
+
   tabs.forEach((tab, idx) => {
     tab.onclick = () => {
       const pane = panes[idx];
       if (pane) {
-        track.scrollTo({ left: pane.offsetLeft, behavior: "smooth" });
+        isClickScrolling = true;
+        clearTimeout(clickTimeout);
+        track.scrollTo({ left: idx * track.clientWidth, behavior: "smooth" });
         tabs.forEach(t => t.classList.remove("active"));
         tab.classList.add("active");
+        if (tab.scrollIntoView) {
+          tab.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+        }
+        clickTimeout = setTimeout(() => {
+          isClickScrolling = false;
+        }, 500);
       }
     };
   });
@@ -1001,6 +1013,7 @@ function initSwipeTabs() {
   // スワイプ時のタブ自動連動
   let isScrolling = null;
   track.onscroll = () => {
+    if (isClickScrolling) return;
     clearTimeout(isScrolling);
     isScrolling = setTimeout(() => {
       const scrollLeft = track.scrollLeft;
@@ -1013,7 +1026,7 @@ function initSwipeTabs() {
       if (activeTab && activeTab.scrollIntoView) {
         activeTab.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
       }
-    }, 40);
+    }, 60);
   };
 
   // URLハッシュによる初期タブ指定対応 (#claude 等)
