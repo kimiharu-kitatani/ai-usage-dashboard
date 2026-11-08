@@ -4,3 +4,9 @@ __pycache__/
 
 # ローカルブラウザ用の表示専用データ（ウィジェットが自動更新）
 data/usage-local.js
+
+*.bak*
+*.png
+*.jpg
+scratch_*
+

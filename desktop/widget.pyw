@@ -11,15 +11,15 @@ NOTIFIED = os.path.join(STATE, "notified.json")
 NOTIFY_MAX_AGE = 6 * 3600  # スリープ等で遅れた通知はこの秒数以内なら出す
 JST = dt.timezone(dt.timedelta(hours=9))
 DM = "#c9ced8"
-BG_ALPHA = 0.25  # 1行表示の背景の濃さ（0=透明〜1=不透明）
-BG_ALPHA_DARK = 0.25   # 後ろが暗いときの濃さ
-BG_ALPHA_LIGHT = 1.0   # 後ろが明るいときの濃さ
-LUM_TO_LIGHT = 0.6     # 明るさがこれを超えたら LIGHT に
-LUM_TO_DARK = 0.45     # これを下回ったら DARK に（ちらつき防止の幅）
-SAMPLE_MS = 3000       # 背景の明るさを調べる間隔
+BG_ALPHA = 0.85  # 常に黒色で15%透過（濃さ0.85）
+BG_ALPHA_DARK = 0.85
+BG_ALPHA_LIGHT = 0.85
+LUM_TO_LIGHT = 0.6
+LUM_TO_DARK = 0.45
+SAMPLE_MS = 3000
 KEY = "#010203"  # 透明にする色（他では使わない）
 HALO = "#000000"
-BG, FG, MUTED, LINE, TRACK = "#1b1e25", "#e8eaf0", "#9aa1ae", "#3a3f4b", "#4b5060"
+BG, FG, MUTED, LINE, TRACK = "#000000", "#e8eaf0", "#9aa1ae", "#3a3f4b", "#4b5060"
 PACE_OK, PACE_WARN, PACE_BAD = "#22c55e", "#eab308", "#ef4444"
 SERVICES = [("claude", "Claude Code"), ("codex", "Codex")]
 WINS = [("five_hour", "5h"), ("today", "今日"), ("weekly", "1w")]
@@ -80,21 +80,21 @@ def weekly_color(today, weekly_rem):
     """
     週間表示の色:
     今日使える枠（1日分）の残り具合で判定
-    - 50%以上: 緑 (PACE_OK)
-    - 50%未満（>0%）: 黄 (PACE_WARN)
-    - 使い切り（<=0%）: 赤 (PACE_BAD)
+    - 今日の分が 50% 以上: 青色 (#3b82f6)
+    - 今日の分が 50% 未満（>0%）: 黄色 (#eab308)
+    - 今日の分を使い切り（<=0%）: 赤色 (#ef4444)
     """
     if weekly_rem is None:
         return MUTED
     if not today or today.get("unknown"):
-        return rem_color(weekly_rem)
+        return "#3b82f6" if weekly_rem >= 50 else "#eab308" if weekly_rem >= 20 else "#ef4444"
     pct = today.get("shown", 0.0)
     if pct >= 50.0:
-        return PACE_OK
+        return "#3b82f6"  # 今日の分が50%以上なら青色表示
     elif pct > 0.0:
-        return PACE_WARN
+        return "#eab308"  # 今日の分が50%未満なら黄色表示
     else:
-        return PACE_BAD
+        return "#ef4444"  # 今日の枠を使い切っている場合は赤色表示
 
 def numeric_percent(value):
     if isinstance(value, bool) or value is None:
@@ -129,6 +129,14 @@ def export_browser_data(data, destination=None):
         for name in ("reset_count", "reset_count_expires_at"):
             if name in raw: service[name] = raw[name]
         payload["services"][key] = service
+    agy_raw = (data.get("services") or {}).get("antigravity")
+    if isinstance(agy_raw, dict):
+        payload["services"]["antigravity"] = {
+            "as_of": agy_raw.get("as_of"),
+            "current_model": agy_raw.get("current_model"),
+            "totals": agy_raw.get("totals"),
+            "models": agy_raw.get("models") or [],
+        }
     destination = destination or os.path.join(os.path.dirname(DATA), "usage-local.js")
     text = "window.AI_USAGE_LOCAL = " + json.dumps(payload, ensure_ascii=True, allow_nan=False) + ";\n"
     temporary = destination + ".tmp"
@@ -191,13 +199,13 @@ class ServiceWidget:
         self.key = key
         self.name = name
 
-        # Tkウィンドウ初期化
+        # Tkウィンドウ初期化（単一ウィンドウ・黒背景・15%透過）
         self.r = tk.Toplevel(self.app.root)
         self.r.overrideredirect(True)
         self.r.attributes("-topmost", True)
-        self.r.configure(bg=KEY)
+        self.r.configure(bg="#000000")
         try:
-            self.r.wm_attributes("-transparentcolor", KEY)
+            self.r.attributes("-alpha", 0.85)
         except Exception:
             pass
 
@@ -207,32 +215,21 @@ class ServiceWidget:
         self.fd = tkfont.Font(family="Yu Gothic UI", size=11)
         self.fdb = tkfont.Font(family="Yu Gothic UI", size=11, weight="bold")
 
-        # 半透明背景ウィンドウ
-        self.bgw = tk.Toplevel(self.r)
-        self.bgw.overrideredirect(True)
-        self.bgw.configure(bg=BG)
-        self.bg_alpha = BG_ALPHA_DARK
-        try:
-            self.bgw.attributes("-alpha", BG_ALPHA_DARK)
-            self.bgw.attributes("-topmost", True)
-        except Exception:
-            pass
-
         self.row_w, self.row_h = 246, 116
-        self.c = tk.Canvas(self.r, bg=KEY, highlightthickness=0, bd=0)
+        self.c = tk.Canvas(self.r, bg="#000000", highlightthickness=1, highlightbackground="#333333", bd=0)
         self.c.pack()
 
         self.detail = False
         self.tip = None
         self.hidden_timer_id = None
 
-        for wdg in (self.c, self.bgw):
+        for wdg in [self.c]:
             wdg.bind("<ButtonPress-1>", self.start)
             wdg.bind("<B1-Motion>", self.move)
             wdg.bind("<ButtonRelease-1>", self.save_pos)
             wdg.bind("<Double-Button-1>", lambda e: self.toggle())
 
-        self.r.bind("<Configure>", lambda e: self.sync_bg())
+        # configure
 
         # コンテキストメニュー
         self.m = tk.Menu(self.r, tearoff=0)
@@ -244,11 +241,11 @@ class ServiceWidget:
         self.m.add_command(label="閉じる", command=self.close)
         self.r.protocol("WM_DELETE_WINDOW", self.close)
         self.c.bind("<Button-3>", lambda e: self.m.tk_popup(e.x_root, e.y_root))
-        self.bgw.bind("<Button-3>", lambda e: self.m.tk_popup(e.x_root, e.y_root))
+        # self.bgw removed
 
         for k, d in (("<Left>", (-1, 0)), ("<Right>", (1, 0)), ("<Up>", (0, -1)), ("<Down>", (0, 1))):
             self.r.bind(k, lambda e, d=d: self.snap(*d))
-            self.bgw.bind(k, lambda e, d=d: self.snap(*d))
+            # bgw snap removed
 
         self.first = False
         pos_info = self.app.load_pos(self.key)
@@ -265,7 +262,6 @@ class ServiceWidget:
         self.draw()
         self.r.after(300, self.r.focus_force)
         self.r.after(500, self.keep_bg)
-        self.r.after(800, self.adapt_bg)
 
     def hwnd(self):
         try:
@@ -294,12 +290,7 @@ class ServiceWidget:
         self.save_pos(xy=(x, y))
 
     def sync_bg(self):
-        try:
-            self.bgw.geometry(f"{self.row_w}x{self.row_h}+{self.r.winfo_x()}+{self.r.winfo_y()}")
-            self.r.lift()
-            self.bgw.lower(self.r)
-        except Exception:
-            pass
+        pass
 
     def sample_lum(self):
         try:
@@ -340,18 +331,10 @@ class ServiceWidget:
             return None
 
     def adapt_bg(self):
-        self.adapt_once()
-        self.r.after(SAMPLE_MS, self.adapt_bg)
+        pass
 
     def adapt_once(self):
-        lum = self.sample_lum()
-        if lum is not None:
-            cur = getattr(self, "bg_alpha", BG_ALPHA_DARK)
-            new = BG_ALPHA_LIGHT if lum > LUM_TO_LIGHT else BG_ALPHA_DARK if lum < LUM_TO_DARK else cur
-            if new != cur:
-                self.bg_alpha = new
-                try: self.bgw.attributes("-alpha", new)
-                except Exception: pass
+        pass
 
     def keep_bg(self):
         self.sync_bg()
@@ -445,7 +428,8 @@ class ServiceWidget:
             if window == "weekly":
                 for day in range(1, 7):
                     tx = bx + bw * day / 7
-                    c.create_line(tx, cy-bh/2+1, tx, cy+bh/2-1, fill=DM, width=1, dash=(1,2), tags="weekly-separator")
+                    c.create_line(tx, cy-bh/2+1, tx, cy+bh/2-1, fill="#0f172a", width=1, tags="weekly-separator")
+                    c.create_line(tx, cy-bh/2+1, tx, cy+bh/2-1, fill="#f8fafc", width=1, dash=(2,2), tags="weekly-separator")
             if window == "weekly" and not today.get("unknown"):
                 px = bx + bw * (100 - today["week_allowed"]) / 100
                 c.create_line(px, cy-bh/2-2, px, cy+bh/2+2, fill="#facc15", width=2, tags="daily-limit")
@@ -521,7 +505,8 @@ class ServiceWidget:
                 if wk == "weekly":
                     for di in range(1, 7):
                         tx = bx + bw * di / 7
-                        c.create_line(tx, cy - bh / 2 + 1, tx, cy + bh / 2 - 1, fill=DM, width=1, dash=(1,2), tags="weekly-separator")
+                        c.create_line(tx, cy - bh / 2 + 1, tx, cy + bh / 2 - 1, fill="#0f172a", width=1, tags="weekly-separator")
+                        c.create_line(tx, cy - bh / 2 + 1, tx, cy + bh / 2 - 1, fill="#f8fafc", width=1, dash=(2,2), tags="weekly-separator")
                     wa = tr.get("week_allowed")
                     if wa is not None:
                         px = bx + bw * (100 - min(100.0, max(0.0, wa))) / 100.0
@@ -540,11 +525,12 @@ class ServiceWidget:
             width = max(width, self.text(x0 + 8, yy + LH // 2, line, fd, "#eab308" if old else DM) + PAD + 10); yy += LH
 
             fa = todt((self.app.data or {}).get("fetched_at"))
-            msg = "最終更新 " + fmt(fa) + (f"（{ago(fa)}）" if fa else "")
+            fa_str = fa.strftime("%Y/%m/%d %H:%M:%S") if fa else "不明"
+            msg = f"最終取得日時: {fa_str}" + (f"（{ago(fa)}）" if fa else "")
             if self.app.busy: msg += "  更新中…"
             if self.app.err: msg += "  更新失敗: " + self.app.err[:60]
             yy += 4; c.create_line(x0, yy - 2, width - PAD - 6, yy - 2, fill=LINE); yy += 2
-            width = max(width, self.text(x0, yy + LH // 2, msg, fd, "#f87171" if self.app.err else DM) + PAD + 10); yy += LH
+            width = max(width, self.text(x0, yy + LH // 2, msg, fd, "#60a5fa" if fa else DM) + PAD + 10); yy += LH
 
             help_tag = "b_help"
             hx = x0
@@ -599,20 +585,20 @@ class ServiceWidget:
             except Exception: pass
         self.hidden_timer_id = self.r.after(int(secs * 1000), self.unhide)
         self.r.withdraw()
-        self.bgw.withdraw()
+        pass
         toast(f"{self.name} ウィジェット", f"{label}非表示にしました")
 
     def unhide(self):
         self.hidden_timer_id = None
         self.r.deiconify()
-        self.bgw.deiconify()
+        pass
         self.sync_bg()
         self.draw()
 
     def close(self):
         self.save_pos()
         self.r.destroy()
-        self.bgw.destroy()
+        pass
         self.app.on_widget_close(self.key)
 
     def clamp(self):
@@ -748,7 +734,7 @@ class AIUsageApp:
             try:
                 py = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
                 subprocess.run([py if os.path.exists(py) else sys.executable, os.path.join(os.path.dirname(HERE), "collector", "collector.py"),
-                                "--reason", "widget-reset"], timeout=180, creationflags=0x08000000, stdin=subprocess.DEVNULL, capture_output=True)
+                                "--reason", "widget-reset", "--no-push"], timeout=180, creationflags=0x08000000, stdin=subprocess.DEVNULL, capture_output=True)
             except Exception: pass
             self.root.after(0, self.reload)
         threading.Thread(target=run, daemon=True).start()
@@ -823,7 +809,21 @@ def single_instance():
         return True
 
 if __name__ == "__main__":
-    _mutex = single_instance()
-    if _mutex:
-        app = AIUsageApp()
-        app.root.mainloop()
+    import traceback
+    log_file = r"C:\Users\kimih\ai-usage-dashboard\desktop\debug.log"
+    with open(log_file, "a", encoding="utf-8") as lf:
+        lf.write(f"--- Started at {dt.datetime.now()} ---\n")
+    try:
+        _mutex = single_instance()
+        with open(log_file, "a", encoding="utf-8") as lf:
+            lf.write(f"Mutex: {_mutex}\n")
+        if _mutex:
+            with open(log_file, "a", encoding="utf-8") as lf:
+                lf.write("Initializing AIUsageApp...\n")
+            app = AIUsageApp()
+            with open(log_file, "a", encoding="utf-8") as lf:
+                lf.write("Starting mainloop...\n")
+            app.root.mainloop()
+    except Exception as e:
+        with open(log_file, "a", encoding="utf-8") as lf:
+            lf.write("EXCEPTION: " + traceback.format_exc() + "\n")

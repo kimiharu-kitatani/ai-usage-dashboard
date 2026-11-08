@@ -104,8 +104,8 @@
   .today-n { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
   .today-n.na { font-size: 18px; color: var(--muted); font-weight: 700; }
   .today-l { font-size: 10px; color: var(--muted); margin-top: 1px; }
-  .day-tick { position: absolute; top: 1px; bottom: 1px; width: 1px; background: repeating-linear-gradient(to bottom, var(--muted) 0 1px, transparent 1px 3px); opacity: .65; box-shadow: none; z-index: 1; pointer-events: none; transform: translateX(-50%); }
-  .batt .day-tick { top: 1px; bottom: 1px; }
+  .day-tick { position: absolute; top: 0; bottom: 0; width: 1.5px; background: repeating-linear-gradient(to bottom, rgba(255,255,255,.95) 0 2px, rgba(15,23,42,.65) 2px 4px); opacity: .95; z-index: 1; pointer-events: none; transform: translateX(-50%); }
+  .batt .day-tick { top: 0; bottom: 0; width: 2px; background: repeating-linear-gradient(to bottom, rgba(255,255,255,.95) 0 3px, rgba(15,23,42,.65) 3px 6px); }
   .pace-mark { position: absolute; top: -1px; bottom: -1px; width: 2px; background: #facc15; opacity: 1; z-index: 2; pointer-events: none; transform: translateX(-50%); box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
   .batt .pace-mark { top: 0; bottom: 0; }
   /* compact view */
@@ -144,27 +144,306 @@
 
 /* 通常表示: 2列（Claude/Codex）、各列3行（5h/今日/1週）。持越しは数値を維持、塗りは100%上限。 */
 body:not(.expanded) #strip{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;max-width:620px}
-body:not(.expanded) #cards,body:not(.expanded) header{display:none!important}
+body:not(.expanded) #cards,body:not(.expanded) header,body:not(.expanded) #top3{display:none!important}
+#top3{display:none;margin:0 0 10px}
+body.expanded #top3{display:block}
+.top3-box{background:var(--card);border:1.5px solid var(--accent);border-radius:12px;padding:8px 10px}
+.top3-head{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:7px;flex-wrap:wrap}
+.top3-title{font-weight:800;font-size:13px;display:inline-flex;align-items:center;gap:5px;color:var(--text)}
+.top3-sub{font-size:10.5px;color:var(--muted)}
+.top3-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media (max-width:560px){.top3-grid{grid-template-columns:1fr}}
+.top3-card{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:7px 8px;display:flex;flex-direction:column;gap:5px;min-width:0}
+.top3-card.rank-1{border-color:#eab308;box-shadow:0 0 0 1px rgba(234,179,8,.25)}
+.top3-top{display:flex;align-items:center;gap:5px;min-width:0}
+.top3-rank{font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:999px;flex:none;line-height:1.3}
+.top3-rank.r1{background:#fef08a;color:#854d0e;border:1px solid #eab308}
+.top3-rank.r2{background:#e2e8f0;color:#1e293b;border:1px solid #94a3b8}
+.top3-rank.r3{background:#ffedd5;color:#9a3412;border:1px solid #fb923c}
+.top3-name{font-weight:700;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-flex;align-items:center;gap:4px;min-width:0;flex:1}
+.top3-score{font-weight:800;font-size:16px;font-variant-numeric:tabular-nums;white-space:nowrap;margin-left:auto}
+.top3-score small{font-size:10px;font-weight:600;color:var(--muted);margin-right:2px}
+.top3-card .mg-bars{display:grid;grid-template-columns:2.2em minmax(24px,1fr) auto;grid-auto-rows:20px;gap:3px 4px;align-items:center}
+.top3-card .mb{width:100%;margin:0}
+.top3-card .mp{font-size:11px;white-space:nowrap;text-align:right}
+.top3-foot{font-size:10px;color:var(--muted);display:flex;justify-content:space-between;align-items:flex-start;gap:4px;font-variant-numeric:tabular-nums;margin-top:auto}
+.top3-resets{display:flex;flex-direction:column;align-items:flex-end;gap:2px;white-space:nowrap;line-height:1.25}
+.top3-rst{white-space:nowrap}
 #strip .mg.has-today{min-width:0;width:100%;align-items:stretch;gap:7px;padding:0;border:0}
 #strip .mg-top{min-height:22px;font-weight:700;font-size:13px}
-#strip .mg-bars{display:grid;grid-template-columns:2.5em minmax(26px,1fr) minmax(4em,auto);grid-template-rows:repeat(3,22px);gap:4px;align-items:center}
+#strip .mg-bars{display:grid;grid-template-columns:2.5em minmax(26px,1fr) minmax(4em,auto);grid-auto-rows:22px;gap:4px;align-items:center}
 #strip .mb{width:100%;margin:0}#strip .mp{font-size:11px;white-space:nowrap}.mmeta{grid-column:1/-1;justify-self:end}
+.chk-5h{display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--text);cursor:pointer;user-select:none;padding:1px 6px;border:1px solid var(--line);border-radius:7px;background:var(--card)}
+.chk-5h input{margin:0;cursor:pointer}
+/* Antigravity モデル別使用状況（3モデル枠：Gemini Pro / Gemini Flash / Claude Sonnet） */
+.agy-strip{grid-column:1/-1;border-top:1px solid var(--line);padding-top:8px;margin-top:2px;display:flex;flex-direction:column;gap:6px;width:100%}
+.agy-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;cursor:pointer}
+.agy-title{font-weight:700;font-size:13px;display:inline-flex;align-items:center;gap:4px}
+.agy-cur{font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;background:rgba(37,99,235,.12);color:var(--accent);border:1px solid rgba(37,99,235,.28)}
+.agy-sum{margin-left:auto;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
+.agy-models-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%}
+@media (max-width:520px){.agy-models-strip{grid-template-columns:1fr}}
+.agy-mcol{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 7px;display:flex;flex-direction:column;gap:4px;min-width:0;cursor:pointer}
+.agy-mcol-head{display:flex;align-items:center;justify-content:space-between;gap:4px;font-weight:700;font-size:12px}
+.agy-mname{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agy-dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--c,var(--accent))}
+.agy-mcol .mg-bars{display:grid;grid-template-columns:2.2em minmax(24px,1fr) auto;grid-auto-rows:20px;gap:3px 4px;align-items:center}
+.agy-mcol .mp{font-size:10.5px;white-space:nowrap;text-align:right}
+.agy-mcol .mp small{font-size:9.5px;color:var(--muted);font-weight:500;margin-left:2px}
+.agy-mcol-sub{font-size:9.5px;color:var(--muted);display:flex;justify-content:space-between;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.agy-cards-wrap{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media (max-width:699px){.agy-cards-wrap{grid-template-columns:1fr}}
+
+
+/* ==============================================================
+   スマホ向け スワイプ & タブ切り替え UI
+   ============================================================== */
+.swipe-tabs { display: none; }
+.swipe-track { width: 100%; }
+
+@media (min-width: 700px) {
+  .swipe-tabs { display: none !important; }
+  .swipe-track {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+    width: 100% !important;
+  }
+  #pane-top3 {
+    grid-column: 1 / -1 !important;
+  }
+  #pane-top3 > #top3 { display: block; margin-bottom: 4px; }
+  #pane-claude, #pane-codex {
+    min-width: 0 !important;
+  }
+  #pane-antigravity {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (max-width: 699px) {
+  html, body {
+    overflow-x: hidden !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  main {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+  header {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 4px 6px !important;
+    padding: 6px 10px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    background: var(--card) !important;
+    border-bottom: 1px solid var(--line) !important;
+    margin: 0 !important;
+  }
+  header h1 {
+    font-size: 14.5px !important;
+    margin: 0 !important;
+  }
+  header .meta {
+    font-size: 10.5px !important;
+  }
+  header .spacer {
+    display: none !important;
+  }
+  .chk-5h {
+    font-size: 9.5px !important;
+    padding: 2px 6px !important;
+  }
+  #htoggle {
+    display: none !important;
+  }
+  .btn, #reload {
+    padding: 2px 7px !important;
+    font-size: 10.5px !important;
+  }
+
+  /* タブバー (Sticky) */
+  .swipe-tabs {
+    display: flex !important;
+    gap: 6px;
+    padding: 8px 10px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .swipe-tabs::-webkit-scrollbar { display: none; }
+
+  .stab {
+    flex: 1 0 auto;
+    padding: 6px 13px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    text-align: center;
+  }
+  .stab.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.25);
+  }
+
+  /* スワイプトラック */
+  .swipe-track {
+    display: flex !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory !important;
+    scroll-behavior: smooth !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .swipe-track::-webkit-scrollbar { display: none; }
+
+  /* 各スライドペイン */
+  .swipe-pane {
+    flex: 0 0 100% !important;
+    width: 100% !important;
+    scroll-snap-align: start !important;
+    box-sizing: border-box !important;
+    padding: 10px 8px 30px !important;
+    min-height: calc(100vh - 110px) !important;
+  }
+
+  #pane-top3 > #top3 {
+    display: block !important;
+  }
+  .top3-box {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 8px !important;
+    margin: 0 !important;
+  }
+  .top3-head {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 2px !important;
+  }
+  .top3-sub {
+    font-size: 9.5px !important;
+    opacity: 0.8 !important;
+  }
+  .top3-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  .top3-card {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 8px 9px !important;
+    gap: 6px !important;
+  }
+  .top3-card .top3-name {
+    font-size: 12px !important;
+  }
+  .top3-card .top3-score {
+    font-size: 14px !important;
+  }
+  .top3-card .mg-bars {
+    grid-template-columns: 2.2em 1fr auto !important;
+    gap: 2px 4px !important;
+  }
+  .top3-card .mp {
+    font-size: 10.5px !important;
+  }
+  .top3-card .top3-foot {
+    font-size: 9.5px !important;
+  }
+  .top3-sub-label {
+    max-width: 90px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .top3-resets {
+    font-size: 10px;
+    gap: 2px;
+  }
+
+  /* ペイン内のカード（Claude / Codex / Antigravity） */
+  .swipe-pane .card {
+    padding: 12px !important;
+    margin-bottom: 8px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .swipe-pane .agy-cards-wrap {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    width: 100% !important;
+  }
+  .swipe-pane .row {
+    padding: 6px 0 !important;
+  }
+  .swipe-pane .reset {
+    font-size: 11px !important;
+  }
+
+  /* 旧来のコンパクトバー・詳細はスマホスワイプ時は非表示 */
+  #strip, #det { display: none !important; }
+}
 
 </style>
 </head>
-<body>
+<body class="expanded">
 <main>
   <header>
     <h1>AI使用量</h1>
     <span class="meta" id="fetched" title="自動取得: PCで Claude Code / Codex を使ったときに更新（最短10分間隔）">読み込み中…</span>
     <span class="stale" id="stale" hidden></span>
     <span class="spacer"></span>
+    <label class="chk-5h" title="全モデルの5時間枠の表示・非表示を切り替え"><input type="checkbox" id="hshow5h">5h枠を表示</label>
     <a class="btn" href="help.html" title="計算の見方">?</a>
+    <button id="htoggle" type="button">コンパクト ▲</button>
     <button id="reload" type="button" aria-label="再読み込み">↻</button>
   </header>
+  <!-- スマホ用タブバー（PCでは非表示） -->
+  <nav class="swipe-tabs" id="swipe-tabs" aria-label="モデル切り替え">
+    <button type="button" class="stab active" data-idx="0">★ TOP 3</button>
+    <button type="button" class="stab" data-idx="1">Claude</button>
+    <button type="button" class="stab" data-idx="2">Codex</button>
+    <button type="button" class="stab" data-idx="3">Antigravity</button>
+  </nav>
+
+  <!-- スワイプ＆PCグリッド用トラック -->
+  <div class="swipe-track" id="swipe-track">
+    <div class="swipe-pane" id="pane-top3">
+      <div id="top3"></div>
+    </div>
+    <div class="swipe-pane" id="pane-claude"></div>
+    <div class="swipe-pane" id="pane-codex"></div>
+    <div class="swipe-pane" id="pane-antigravity"></div>
+  </div>
+
   <div id="strip"></div>
   <div id="det"></div>
-  <div id="cards"></div>
+  <div id="cards" style="display:none"></div>
 </main>
 
 <template id="card-tpl">
@@ -214,10 +493,13 @@ const ICONS = {
     [0,30,60,90,120,150].map(a => '<line x1="12" y1="2.5" x2="12" y2="21.5" transform="rotate(' + a + ' 12 12)"/>').join("") + '</g></svg>',
   codex: '<svg class="ico" viewBox="0 0 24 24" aria-label="Codex"><rect x="1" y="1" width="22" height="22" rx="6" fill="#111"/><path d="M6.5 8l4 4-4 4" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12.5" y1="16.5" x2="17.5" y2="16.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>',
   grok: '<svg class="ico" viewBox="0 0 24 24" aria-label="Grok Bot"><rect x="1" y="1" width="22" height="22" rx="6" fill="#111"/><path d="M7 17L17 7M9.5 7.5h-2v2M14.5 16.5h2v-2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  antigravity: '<svg class="ico" viewBox="0 0 24 24" aria-label="Antigravity"><rect x="1" y="1" width="22" height="22" rx="6" fill="#2563eb"/><path d="M12 4.5l6.5 14h-2.8l-1.4-3.2H9.7l-1.4 3.2H5.5L12 4.5zm0 5.1l-1.5 3.6h3L12 9.6z" fill="#fff"/></svg>',
 };
 const GROK_NOTE = "自動取得できません（公式APIなし）。Grok Bot アプリの設定「Usage & Billing」で確認してください（表示されないアカウントもあります）。";
 const NA = "不明";
 const LS_KEY = (k) => "aiusage.manual." + k;
+function isShow5h() { try { return localStorage.getItem("aiusage.show5h") !== "0"; } catch { return true; } }
+function setShow5h(on) { try { localStorage.setItem("aiusage.show5h", on ? "1" : "0"); } catch {} render(); }
 let DATA = null;
 
 const fmtDate = new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" });
@@ -266,11 +548,11 @@ function remColor(rem) {
 
 function weeklyColor(tr, rem) {
   if (rem === null || rem === undefined) return "var(--track)";
-  if (!tr || tr.unknown) return rem >= 50 ? "#22c55e" : rem >= 20 ? "#eab308" : "#ef4444";
+  if (!tr || tr.unknown) return rem >= 50 ? "#3b82f6" : rem >= 20 ? "#eab308" : "#ef4444";
   const pct = tr.shown != null ? tr.shown : 0;
-  if (pct >= 50) return "#22c55e";
-  if (pct > 0) return "#eab308";
-  return "#ef4444";
+  if (pct >= 50) return "#3b82f6"; // 青色（今日の分が50%以上）
+  if (pct > 0) return "#eab308";  // 黄色（今日の分が50%未満）
+  return "#ef4444";               // 赤色（今日の枠を使い切り）
 }
 
 function todayRemain(fiveAuto, fiveMan, weekAuto, weekMan, manSavedAt, autoAsOf, dayTrack, now = Date.now()) {
@@ -338,7 +620,413 @@ function windowRow(label, autoW, manW, manSavedAt, autoAsOf, pacePct, isWeekly, 
   return row;
 }
 
+function fmtTok(n) {
+  if (!n || n <= 0) return "0";
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+  if (n >= 1e3) return Math.round(n / 1e3) + "k";
+  return String(n);
+}
+function agyModelColor(name) {
+  const s = String(name || "");
+  if (s.includes("Claude")) return "#d97757";
+  if (s.includes("Argon") || s.includes("Pro")) return "#8b5cf6";
+  if (s.includes("Gemini")) return "#3b82f6";
+  return "#64748b";
+}
+function renderAntigravity(strip, det, wrap) {
+  const agy = (DATA && DATA.services && DATA.services.antigravity) || null;
+  const models = (agy && Array.isArray(agy.models) && agy.models.length) ? agy.models : [];
+  const totals = (agy && agy.totals) || {};
+  const tDay = totals.today || {}, tWk = totals.weekly || {};
+  const asOf = (agy && toDate(agy.as_of)) || (DATA && toDate(DATA.fetched_at));
+
+  const st = document.createElement("div");
+  st.className = "agy-strip";
+  const head = document.createElement("div");
+  head.className = "agy-head";
+  head.title = "Antigravity 利用枠（タップで詳細）";
+  head.innerHTML = '<span class="agy-title">' + ICONS.antigravity + '<span>Antigravity</span></span>';
+  if (agy && agy.current_model) {
+    const cur = document.createElement("span");
+    cur.className = "agy-cur";
+    cur.textContent = "現在: " + agy.current_model;
+    head.appendChild(cur);
+  }
+  const sum = document.createElement("span");
+  sum.className = "agy-sum";
+  sum.textContent = (tDay.steps || tWk.steps)
+    ? "今日 " + (tDay.prompts || 0) + "回/" + (tDay.steps || 0) + "s (" + fmtTok(tDay.total_tokens) + ") · 1週 " + (tWk.prompts || 0) + "回/" + (tWk.steps || 0) + "s (" + fmtTok(tWk.total_tokens) + ")"
+    : (asOf ? "取得 " + fmt(asOf) : "");
+  head.appendChild(sum);
+  head.addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
+  st.appendChild(head);
+
+  const mGrid = document.createElement("div");
+  mGrid.className = "agy-models-strip";
+
+  const dsv = document.createElement("div");
+  dsv.className = "dsv";
+  dsv.innerHTML = ICONS.antigravity + "<div></div>";
+  const dbox = dsv.lastChild;
+  const dlHead = document.createElement("div");
+  dlHead.className = "dl";
+  dlHead.innerHTML = '<span class="k">Antigravity（公式 agy /usage 取得）</span> ' + (agy && agy.current_model ? "現在: " + agy.current_model : "");
+  dbox.appendChild(dlHead);
+
+  const cardsWrap = document.createElement("div");
+  cardsWrap.className = "agy-cards-wrap";
+
+  models.forEach(m => {
+    const mKey = m.key || ("agy_" + String(m.name).toLowerCase().replace(/[^a-z0-9]+/g, "_"));
+    const man = loadManual(mKey);
+    const manSavedAt = man && man.saved_at ? new Date(man.saved_at) : null;
+    const col = agyModelColor(m.name);
+    const tr = todayRemain(m.five_hour, man && man.five_hour, m.weekly, man && man.weekly, manSavedAt, asOf, m.day_track);
+    const has5h = (m.five_hour && num(m.five_hour.used_percent) !== null) || (man && man.five_hour && num(man.five_hour.used_percent) !== null);
+    const hasWk = (m.weekly && num(m.weekly.used_percent) !== null) || (man && man.weekly && num(man.weekly.used_percent) !== null);
+
+    // フルカード (#cards) を先に組んで、そのバッテリーバーから #strip / #det も生成（Claude/Codex と完全統一）
+    const card = document.createElement("section");
+    card.className = "card";
+    card.innerHTML =
+      '<div class="card-head"><h2 class="name"></h2><span class="plan">Antigravity</span></div>' +
+      '<div class="rows"></div>' +
+      '<div class="src"></div>' +
+      '<div class="actions"><button type="button" class="open-manual">✎ 手入力</button></div>';
+    card.querySelector(".name").textContent = m.name;
+    const cRows = card.querySelector(".rows");
+    const show5h = isShow5h();
+    const wins = [
+      { sl: "今日", row: dailyWindowRow(tr), pace: null },
+      { sl: "1w", row: windowRow("1週間", m.weekly, man && man.weekly, manSavedAt, asOf, tr.unknown ? null : 100 - tr.weekAllowed, true, tr), pace: tr.unknown ? null : 100 - tr.weekAllowed }
+    ];
+    if (show5h && (has5h || !hasWk)) {
+      wins.push({ sl: "5h", row: windowRow("5時間枠", m.five_hour, man && man.five_hour, manSavedAt, asOf, null, false), pace: null });
+    }
+    wins.forEach(({ row }) => cRows.appendChild(row));
+
+    // Compact #strip カラム
+    const mCol = document.createElement("div");
+    mCol.className = "agy-mcol";
+    mCol.title = m.name + "（タップで詳細）";
+    const mTop = document.createElement("div");
+    mTop.className = "agy-mcol-head";
+    mTop.innerHTML = '<span class="agy-mname" style="--c:' + col + '"><span class="agy-dot"></span><span></span></span>';
+    mTop.querySelector(".agy-mname span:last-child").textContent = m.name;
+    mCol.appendChild(mTop);
+
+    const gBars = document.createElement("div");
+    gBars.className = "mg-bars";
+    const dlModel = document.createElement("div");
+    dlModel.className = "dl";
+    dlModel.innerHTML = '<span class="k"></span> ' + todayLine(tr);
+    dlModel.querySelector(".k").textContent = "【" + m.name + "】";
+    dbox.appendChild(dlModel);
+
+    wins.forEach(({ sl, row, pace, no5h }) => {
+      const src = row.querySelector(".batt"), t = src.querySelector(".bt").textContent, na = !t.startsWith("残り");
+      const mb = document.createElement("span");
+      mb.className = "mb" + (na ? " na-ring" : "");
+      mb.style.setProperty("--c", src.style.getPropertyValue("--c"));
+      mb.innerHTML = '<div class="fill"></div>';
+      mb.firstChild.style.width = src.querySelector(".fill").style.width;
+      if (sl === "1w") {
+        for (let _di = 1; _di <= 6; _di++) {
+          const _t = document.createElement("div");
+          _t.className = "day-tick";
+          _t.style.left = (_di * 100 / 7) + "%";
+          mb.appendChild(_t);
+        }
+      }
+      if (pace != null && !isNaN(pace)) {
+        const mark = document.createElement("div");
+        mark.className = "pace-mark";
+        mark.style.left = Math.min(100, Math.max(0, pace)) + "%";
+        mb.appendChild(mark);
+      }
+      const wl = document.createElement("span");
+      wl.className = "wl";
+      wl.textContent = sl;
+      const mp = document.createElement("span");
+      mp.className = "mp" + (na ? " na" : "");
+      mp.textContent = no5h ? "週枠のみ" : (na ? "不明" : t.replace("残り ", ""));
+      gBars.append(wl, mb, mp);
+
+      const cd = row.querySelector(".countdown");
+      const rt = row.querySelector(".rt");
+      const l = document.createElement("div");
+      l.className = "dl";
+      l.innerHTML = '<span class="k"></span> ↻ <span class="rt"></span> <span class="countdown"></span>';
+      l.querySelector(".k").textContent = "  " + sl + " " + (no5h ? "週枠のみ" : (na ? "不明" : t.replace("残り ", "")));
+      l.querySelector(".rt").textContent = rt ? rt.textContent : "";
+      const c2 = l.querySelector(".countdown");
+      if (cd && cd.dataset.t) {
+        c2.dataset.t = cd.dataset.t;
+        c2.textContent = cd.textContent;
+      }
+      dbox.appendChild(l);
+    });
+
+    mCol.appendChild(gBars);
+
+    // 下部サブ行（5h または 1w のリセットカウントダウンを表示）
+    const subLine = document.createElement("div");
+    subLine.className = "agy-mcol-sub";
+    const r5 = m.five_hour && toDate(m.five_hour.resets_at);
+    const rW = m.weekly && toDate(m.weekly.resets_at);
+    const cdSpan = document.createElement("span");
+    if (show5h && r5 && has5h) {
+      cdSpan.innerHTML = '5h ↻ <span class="countdown" data-t="' + r5.toISOString() + '">' + countdown(r5) + '</span>';
+    } else if (rW) {
+      cdSpan.innerHTML = '1w ↻ <span class="countdown" data-t="' + rW.toISOString() + '">' + countdown(rW) + '</span>';
+    }
+    const wkSpan = document.createElement("span");
+    if (show5h && r5 && has5h && rW) {
+      wkSpan.innerHTML = '1w ↻ <span class="countdown" data-t="' + rW.toISOString() + '">' + countdown(rW) + '</span>';
+    }
+    subLine.append(cdSpan, wkSpan);
+    mCol.appendChild(subLine);
+    mCol.addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
+    mGrid.appendChild(mCol);
+
+    const wD = m.today || {}, wW = m.weekly || {};
+    const srcParts = [];
+    if (asOf) srcParts.push("値の時点 " + fmt(asOf) + "（" + ago(asOf) + "）");
+    if (wW.steps) srcParts.push("1週ログ " + (wW.prompts || 0) + "回/" + wW.steps + "s (" + fmtTok(wW.total_tokens) + ")");
+    card.querySelector(".src").textContent = srcParts.join(" ／ ");
+    card.querySelector(".open-manual").addEventListener("click", () => openManual({ key: mKey, name: "Antigravity — " + m.name }));
+    if (man) card.querySelector(".open-manual").insertAdjacentHTML("beforeend", '<span class="badge">保存済</span>');
+    cardsWrap.appendChild(card);
+  });
+
+  st.appendChild(mGrid);
+  strip.appendChild(st);
+  det.appendChild(dsv);
+  wrap.appendChild(cardsWrap);
+}
+
+function renderTop3(det) {
+  const top3El = document.getElementById("top3");
+  if (!top3El) return;
+  top3El.textContent = "";
+  const show5h = isShow5h();
+  const candidates = [];
+
+  SERVICES.forEach(s => {
+    const auto = (DATA && DATA.services && DATA.services[s.key]) || {};
+    const man = loadManual(s.key);
+    const manSavedAt = man && man.saved_at ? new Date(man.saved_at) : null;
+    const asOf = toDate(auto.as_of) || toDate(DATA && DATA.fetched_at);
+    const tr = todayRemain(auto.five_hour, man && man.five_hour, auto.weekly, man && man.weekly, manSavedAt, asOf, auto.day_track);
+    const wu = pick(num(auto.weekly && auto.weekly.used_percent), num(man && man.weekly && man.weekly.used_percent), manSavedAt, asOf);
+    const weekRem = wu.v == null ? null : Math.round((100 - wu.v) * 10) / 10;
+    const wins = [
+      { sl: "今日", row: dailyWindowRow(tr), pace: null }
+    ];
+    const r5 = auto.five_hour && toDate(auto.five_hour.resets_at);
+    const rW = auto.weekly && toDate(auto.weekly.resets_at);
+    candidates.push({
+      name: s.name,
+      sub: s.plan,
+      iconHtml: ICONS[s.key],
+      tr,
+      weekRem,
+      wins,
+      r5,
+      rW,
+      has5h: true
+    });
+  });
+
+  const agy = (DATA && DATA.services && DATA.services.antigravity) || null;
+  const agyModels = (agy && Array.isArray(agy.models)) ? agy.models : [];
+  const agyAsOf = (agy && toDate(agy.as_of)) || (DATA && toDate(DATA.fetched_at));
+  agyModels.forEach(m => {
+    const mKey = m.key || ("agy_" + String(m.name).toLowerCase().replace(/[^a-z0-9]+/g, "_"));
+    const man = loadManual(mKey);
+    const manSavedAt = man && man.saved_at ? new Date(man.saved_at) : null;
+    const col = agyModelColor(m.name);
+    const tr = todayRemain(m.five_hour, man && man.five_hour, m.weekly, man && man.weekly, manSavedAt, agyAsOf, m.day_track);
+    const wu = pick(num(m.weekly && m.weekly.used_percent), num(man && man.weekly && man.weekly.used_percent), manSavedAt, agyAsOf);
+    const weekRem = wu.v == null ? null : Math.round((100 - wu.v) * 10) / 10;
+    const has5h = (m.five_hour && num(m.five_hour.used_percent) !== null) || (man && man.five_hour && num(man.five_hour.used_percent) !== null);
+    const hasWk = (m.weekly && num(m.weekly.used_percent) !== null) || (man && man.weekly && num(man.weekly.used_percent) !== null);
+    const wins = [
+      { sl: "今日", row: dailyWindowRow(tr), pace: null }
+    ];
+    const r5 = m.five_hour && toDate(m.five_hour.resets_at);
+    const rW = m.weekly && toDate(m.weekly.resets_at);
+    candidates.push({
+      name: m.name,
+      sub: "Antigravity",
+      iconHtml: '<span class="agy-dot" style="--c:' + col + ';width:9px;height:9px"></span>',
+      tr,
+      weekRem,
+      wins,
+      r5,
+      rW,
+      has5h
+    });
+  });
+
+  candidates.sort((a, b) => {
+    const sa = (!a.tr || a.tr.unknown || a.tr.shown == null) ? -1 : a.tr.shown;
+    const sb = (!b.tr || b.tr.unknown || b.tr.shown == null) ? -1 : b.tr.shown;
+    if (sb !== sa) return sb - sa;
+    const wa = a.weekRem == null ? -1 : a.weekRem;
+    const wb = b.weekRem == null ? -1 : b.weekRem;
+    return wb - wa;
+  });
+
+  const top3 = candidates.slice(0, 3);
+  if (!top3.length) return;
+
+  const box = document.createElement("section");
+  box.className = "top3-box";
+  box.innerHTML =
+    '<div class="top3-head">' +
+      '<span class="top3-title">★ 今使うと良いモデル 上位3つ</span>' +
+      '<span class="top3-sub">今日使える分（残り％）が多い順</span>' +
+    '</div>' +
+    '<div class="top3-grid"></div>';
+  const grid = box.querySelector(".top3-grid");
+
+  top3.forEach((item, idx) => {
+    const rank = idx + 1;
+    const card = document.createElement("div");
+    card.className = "top3-card rank-" + rank;
+    const shownTxt = (!item.tr || item.tr.unknown || item.tr.shown == null) ? NA : (item.tr.shown + "%");
+    const scoreColor = (!item.tr || item.tr.unknown) ? "var(--muted)" : item.tr.color;
+
+    const topRow = document.createElement("div");
+    topRow.className = "top3-top";
+    topRow.innerHTML =
+      '<span class="top3-rank r' + rank + '">' + rank + '位</span>' +
+      '<span class="top3-name">' + item.iconHtml + '<span></span></span>' +
+      '<span class="top3-score" style="color:' + scoreColor + '"><small>今日</small>' + shownTxt + '</span>';
+    topRow.querySelector(".top3-name > span:last-child").textContent = item.name;
+    card.appendChild(topRow);
+
+    const gBars = document.createElement("div");
+    gBars.className = "mg-bars";
+    item.wins.forEach(({ sl, row, pace }) => {
+      const src = row.querySelector(".batt"), t = src.querySelector(".bt").textContent, na = !t.startsWith("残り");
+      const mb = document.createElement("span");
+      mb.className = "mb" + (na ? " na-ring" : "");
+      mb.style.setProperty("--c", src.style.getPropertyValue("--c"));
+      mb.innerHTML = '<div class="fill"></div>';
+      mb.firstChild.style.width = src.querySelector(".fill").style.width;
+      if (sl === "1w") {
+        for (let _di = 1; _di <= 6; _di++) {
+          const _t = document.createElement("div");
+          _t.className = "day-tick";
+          _t.style.left = (_di * 100 / 7) + "%";
+          mb.appendChild(_t);
+        }
+      }
+      if (pace != null && !isNaN(pace)) {
+        const mark = document.createElement("div");
+        mark.className = "pace-mark";
+        mark.style.left = Math.min(100, Math.max(0, pace)) + "%";
+        mb.appendChild(mark);
+      }
+      const wl = document.createElement("span");
+      wl.className = "wl";
+      wl.textContent = sl;
+      const mp = document.createElement("span");
+      mp.className = "mp" + (na ? " na" : "");
+      mp.textContent = na ? "不明" : t.replace("残り ", "");
+      gBars.append(wl, mb, mp);
+    });
+    card.appendChild(gBars);
+
+    const foot = document.createElement("div");
+    foot.className = "top3-foot";
+    const subSpan = document.createElement("span");
+    subSpan.textContent = item.sub;
+    const resetsBox = document.createElement("div");
+    resetsBox.className = "top3-resets";
+
+    // 週間リセットは常に表示
+    if (item.rW) {
+      const wkLine = document.createElement("div");
+      wkLine.className = "top3-rst rst-1w";
+      wkLine.innerHTML = '1w ↻ <span class="countdown" data-t="' + item.rW.toISOString() + '">' + countdown(item.rW) + '</span>';
+      resetsBox.appendChild(wkLine);
+    }
+
+    // 5時間枠表示がONで、かつ5時間枠が存在する場合は週間リセットの下に表示
+    if (show5h && item.r5 && item.has5h) {
+      const fiveLine = document.createElement("div");
+      fiveLine.className = "top3-rst rst-5h";
+      fiveLine.innerHTML = '5h ↻ <span class="countdown" data-t="' + item.r5.toISOString() + '">' + countdown(item.r5) + '</span>';
+      resetsBox.appendChild(fiveLine);
+    }
+
+    foot.append(subSpan, resetsBox);
+    card.appendChild(foot);
+    grid.appendChild(card);
+  });
+
+  top3El.appendChild(box);
+
+  if (det) {
+    const dTop = document.createElement("div");
+    dTop.className = "dsv";
+    dTop.innerHTML = '<div><div class="dl"><span class="k">★ 今使うと良いモデル TOP 3：</span>' +
+      top3.map((it, i) => (i + 1) + "位 " + it.name + "（" + ((!it.tr || it.tr.unknown) ? NA : it.tr.shown + "%") + "）").join(" ／ ") +
+      '</div></div>';
+    det.prepend(dTop);
+  }
+}
+
+
+function initSwipeTabs() {
+  const tabs = document.querySelectorAll(".stab");
+  const track = document.getElementById("swipe-track");
+  const panes = document.querySelectorAll(".swipe-pane");
+  if (!track || !tabs.length || !panes.length) return;
+
+  tabs.forEach((tab, idx) => {
+    tab.onclick = () => {
+      const pane = panes[idx];
+      if (pane) {
+        track.scrollTo({ left: pane.offsetLeft, behavior: "smooth" });
+        tabs.forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+      }
+    };
+  });
+
+  // スワイプ時のタブ自動連動
+  let isScrolling = null;
+  track.onscroll = () => {
+    clearTimeout(isScrolling);
+    isScrolling = setTimeout(() => {
+      const scrollLeft = track.scrollLeft;
+      const width = track.clientWidth || 1;
+      const curIdx = Math.round(scrollLeft / width);
+      tabs.forEach((t, i) => {
+        t.classList.toggle("active", i === curIdx);
+      });
+      const activeTab = tabs[curIdx];
+      if (activeTab && activeTab.scrollIntoView) {
+        activeTab.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      }
+    }, 40);
+  };
+
+  // URLハッシュによる初期タブ指定対応 (#claude 等)
+  const hash = location.hash.replace('#', '');
+  if (hash === 'claude') tabs[1]?.click();
+  else if (hash === 'codex') tabs[2]?.click();
+  else if (hash === 'antigravity') tabs[3]?.click();
+}
+
 function render() {
+  const pClaude = document.getElementById('pane-claude'); if (pClaude) pClaude.textContent = '';
+  const pCodex = document.getElementById('pane-codex'); if (pCodex) pCodex.textContent = '';
+  const pAgy = document.getElementById('pane-antigravity'); if (pAgy) pAgy.textContent = '';
   const wrap = document.getElementById("cards");
   wrap.textContent = "";
   const tpl = document.getElementById("card-tpl");
@@ -354,11 +1042,14 @@ function render() {
     node.querySelector(".plan").textContent = s.plan;
     const tr = todayRemain(auto.five_hour, man && man.five_hour, auto.weekly, man && man.weekly, manSavedAt, autoAsOf, auto.day_track);
     const rows=node.querySelector('.rows');
+    const show5h = isShow5h();
     const wins=[
-      {sl:'5h',row:windowRow('5時間枠',auto.five_hour,man&&man.five_hour,manSavedAt,autoAsOf,null,false),pace:null},
       {sl:'今日',row:dailyWindowRow(tr),pace:null},
       {sl:'1w',row:windowRow('1週間',auto.weekly,man&&man.weekly,manSavedAt,autoAsOf,tr.unknown?null:100-tr.weekAllowed,true,tr),pace:tr.unknown?null:100-tr.weekAllowed}
     ];
+    if (show5h) {
+      wins.push({sl:'5h',row:windowRow('5時間枠',auto.five_hour,man&&man.five_hour,manSavedAt,autoAsOf,null,false),pace:null});
+    }
     wins.forEach(({row})=>rows.appendChild(row));
 
     // リセット回数
@@ -451,8 +1142,14 @@ function render() {
     node.querySelector(".official").title = s.name + " の公式使用量ページ";
     node.querySelector(".open-manual").addEventListener("click", () => openManual(s));
     if (man) node.querySelector(".open-manual").insertAdjacentHTML("beforeend", '<span class="badge">保存済</span>');
-    wrap.appendChild(node);
+    const targetPane = s.key === 'claude' ? document.getElementById("pane-claude") : document.getElementById("pane-codex");
+    if (targetPane) targetPane.appendChild(node);
+    else wrap.appendChild(node);
   });
+  const agyPane = document.getElementById("pane-antigravity") || wrap;
+  renderAntigravity(strip, det, agyPane);
+  renderTop3(det);
+  initSwipeTabs();
   // Grok Bot: 自動取得不可のため常に「不明」（推測値は入れない）
   const gg = document.createElement("div"); gg.className = "mg"; gg.title = "Grok Bot（タップで詳細）";
   gg.innerHTML = ICONS.grok + '<span class="wl">週</span><span class="mb na-ring"><div class="fill" style="width:0"></div></span><span class="mp na">不明</span>';
@@ -467,8 +1164,15 @@ function render() {
   gc.querySelector(".note").textContent = GROK_NOTE;
   wrap.appendChild(gc);
   const mm = document.createElement("div"); mm.className = "mmeta";
-  mm.innerHTML = '<span class="t" id="mtime"></span><a class="btn" href="help.html" title="計算の見方" style="padding:1px 5px;font-size:10px">?</a><button type="button" id="mtoggle"></button><button type="button" id="mreload" aria-label="再読み込み">↻</button>';
+  mm.innerHTML = '<label class="chk-5h" title="全モデルの5時間枠の表示・非表示を切り替え"><input type="checkbox" id="mshow5h">5h枠を表示</label><span class="t" id="mtime"></span><a class="btn" href="help.html" title="計算の見方" style="padding:1px 5px;font-size:10px">?</a><button type="button" id="mtoggle"></button><button type="button" id="mreload" aria-label="再読み込み">↻</button>';
   strip.appendChild(mm);
+  const mChk = mm.querySelector("#mshow5h");
+  if (mChk) {
+    mChk.checked = isShow5h();
+    mChk.addEventListener("change", e => setShow5h(e.target.checked));
+  }
+  const hChk = document.getElementById("hshow5h");
+  if (hChk) hChk.checked = isShow5h();
   mm.querySelector("#mtoggle").addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
   mm.querySelector("#mreload").addEventListener("click", () => load());
   setExpanded(document.body.classList.contains("expanded"), true);
@@ -578,8 +1282,13 @@ async function load() {
 }
 
 document.getElementById("reload").addEventListener("click", load);
+const _htoggle = document.getElementById("htoggle");
+if (_htoggle) _htoggle.addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
+const _hshow5h = document.getElementById("hshow5h");
+if (_hshow5h) _hshow5h.addEventListener("change", e => setShow5h(e.target.checked));
 document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
-if (location.hash === "#detail") document.body.classList.add("expanded");
+if (location.hash === "#compact") document.body.classList.remove("expanded");
+else document.body.classList.add("expanded");
 setInterval(tick, 15000);
 setInterval(load, 5 * 60000);
 load();

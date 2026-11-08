@@ -508,6 +508,247 @@ def collect_claude_statusline(svc, errors):
     return svc
 
 
+# ---------------------------------------------------------------- Antigravity
+AGY_MODEL_RE = re.compile(
+    r"<USER_SETTINGS_CHANGE>\s*The user changed setting `Model Selection` from [^\n]+? to ([A-Za-z0-9 _.\-()]+?)\.\s*No need"
+)
+
+
+def find_agy_exe():
+    p = find_exe("agy")
+    if p:
+        return p
+    local_app = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~/AppData/Local")
+    cand = os.path.join(local_app, "agy", "bin", "agy.exe" if IS_WIN else "agy")
+    if os.path.exists(cand):
+        return cand
+    return None
+
+
+def agy_via_cli(timeout=30):
+    exe = find_agy_exe()
+    if not exe:
+        raise RuntimeError("agy コマンドが見つかりません")
+    env = dict(os.environ)
+    env["NO_COLOR"] = "1"
+    r = subprocess.run(
+        [exe, "-p", "/usage", "--print-timeout", "25s"],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        timeout=timeout,
+        creationflags=NO_WINDOW,
+        env=env,
+    )
+    out = r.stdout.decode("utf-8", "replace")
+    err = r.stderr.decode("utf-8", "replace")
+    dbg("agy -p /usage exit", r.returncode)
+    dbg("agy -p /usage stdout", out[:3000])
+    return out + "\n" + err
+
+
+def _empty_agy_win():
+    return {
+        "used_percent": None,
+        "remain_percent": None,
+        "resets_at": None,
+        "prompts": 0,
+        "steps": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "total_tokens": 0,
+    }
+
+
+def _add_agy_win(dst, prompts=0, steps=0, inp=0, out=0, cache=0):
+    dst["prompts"] += prompts
+    dst["steps"] += steps
+    dst["input_tokens"] += inp
+    dst["output_tokens"] += out
+    dst["cache_read_tokens"] += cache
+    dst["total_tokens"] += inp + out
+
+
+def collect_antigravity(now=None, old_agy=None):
+    """公式 CLI `agy -p /usage` から各モデル枠（Gemini Models / Claude and GPT models 等）の
+    5時間枠・週間枠の残量%とリセット時刻を取得し、ローカル transcript の回数・トークン数を付加する。
+    """
+    now = now or dt.datetime.now(JST)
+    cut_5h = now - dt.timedelta(hours=5)
+    cut_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    cut_1w = now - dt.timedelta(days=7)
+
+    old_models_by_name = {}
+    if isinstance(old_agy, dict):
+        for om in old_agy.get("models") or []:
+            if isinstance(om, dict) and om.get("name"):
+                old_models_by_name[om["name"]] = om
+
+    models = {}
+    errors = []
+
+    def ensure_model(m_name):
+        if m_name not in models:
+            slug = re.sub(r"[^a-z0-9]+", "_", m_name.lower()).strip("_")
+            models[m_name] = {
+                "key": "agy_" + slug,
+                "name": m_name,
+                "five_hour": _empty_agy_win(),
+                "today": _empty_agy_win(),
+                "weekly": _empty_agy_win(),
+                "last_used_at": None,
+            }
+        return models[m_name]
+
+    # 1) 公式 `agy -p /usage` からクォータ残量%とリセット時刻を取得
+    got_cli = False
+    try:
+        raw_out = agy_via_cli()
+        for line in raw_out.splitlines():
+            cols = [c.strip() for c in ANSI_RE.sub("", line).split("\t")]
+            if len(cols) < 4:
+                continue
+            b_name, l_type, rem_s, rst_s = cols[0], cols[1].lower(), cols[2], cols[3]
+            if not b_name or b_name.lower().startswith("fetching"):
+                continue
+            m_rem = re.search(r"(\d+(?:\.\d+)?)\s*%", rem_s)
+            if not m_rem:
+                continue
+            rem_pct = pct(m_rem.group(1))
+            used_pct = round(max(0.0, min(100.0, 100.0 - rem_pct)), 1) if rem_pct is not None else None
+            rst_iso = iso(rst_s)
+            entry = ensure_model(b_name)
+            if "five hour" in l_type or "5h" in l_type:
+                entry["five_hour"]["used_percent"] = used_pct
+                entry["five_hour"]["remain_percent"] = rem_pct
+                entry["five_hour"]["resets_at"] = rst_iso
+                got_cli = True
+            elif "week" in l_type:
+                entry["weekly"]["used_percent"] = used_pct
+                entry["weekly"]["remain_percent"] = rem_pct
+                entry["weekly"]["resets_at"] = rst_iso
+                got_cli = True
+    except Exception as e:
+        errors.append("agy cli: %s" % e)
+
+    # CLI が失敗した場合は前回のクォータ値を引き継ぎ（期限切れは drop_expired で消去）
+    if not got_cli and old_models_by_name:
+        for b_name, om in old_models_by_name.items():
+            entry = ensure_model(b_name)
+            for k in ("five_hour", "weekly"):
+                ow = om.get(k) or {}
+                entry[k]["used_percent"] = ow.get("used_percent")
+                entry[k]["remain_percent"] = ow.get("remain_percent")
+                entry[k]["resets_at"] = ow.get("resets_at")
+            drop_expired(entry, errors)
+
+    # Argon 系バケット名（3枠目）を特定
+    argon_bucket = None
+    for b_name in models:
+        if "argon" in b_name.lower() or ("pro" in b_name.lower() and b_name != "Gemini Models"):
+            argon_bucket = b_name
+            break
+
+    def map_raw_to_buckets(raw_name):
+        u = str(raw_name or "").upper()
+        if any(x in u for x in ("CLAUDE", "SONNET", "OPUS", "HAIKU", "GPT")):
+            return ["Claude and GPT models"]
+        if "ARGON" in u or "PRO" in u:
+            res = ["Gemini Models"]
+            if argon_bucket:
+                res.append(argon_bucket)
+            return res
+        return ["Gemini Models"]
+
+    # 2) ローカル transcript から回数・ステップ数・トークン数を集計
+    brain_dir = os.path.expanduser("~/.gemini/antigravity/brain")
+    pattern = os.path.join(brain_dir, "*", ".system_generated", "logs", "transcript.jsonl")
+    files = glob.glob(pattern)
+    totals = {
+        "five_hour": _empty_agy_win(),
+        "today": _empty_agy_win(),
+        "weekly": _empty_agy_win(),
+    }
+    latest_ts = None
+    latest_model = None
+
+    for fpath in files:
+        cur_raw = "Gemini Flash"
+        try:
+            with open(fpath, "r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                    except Exception:
+                        continue
+                    stype = obj.get("type")
+                    content = obj.get("content") or ""
+                    if stype == "USER_INPUT" and "Model Selection" in content:
+                        m = AGY_MODEL_RE.search(content)
+                        if m:
+                            cur_raw = m.group(1).strip()
+                    ts = _parse_iso(obj.get("created_at"))
+                    if ts is None:
+                        continue
+                    is_prompt = (stype == "USER_INPUT" and obj.get("source") == "USER_EXPLICIT")
+                    is_step = (stype == "PLANNER_RESPONSE")
+                    if not (is_prompt or is_step):
+                        continue
+
+                    inp = int(obj.get("input_tokens") or 0) if is_step else 0
+                    out = int(obj.get("output_tokens") or 0) if is_step else 0
+                    cache = int(obj.get("cache_read_tokens") or 0) if is_step else 0
+                    p_cnt = 1 if is_prompt else 0
+                    s_cnt = 1 if is_step else 0
+
+                    ts_iso = ts.isoformat(timespec="seconds")
+                    if latest_ts is None or ts > latest_ts:
+                        latest_ts = ts
+                        latest_model = cur_raw
+
+                    for b_name in map_raw_to_buckets(cur_raw):
+                        if b_name not in models:
+                            continue
+                        m_entry = models[b_name]
+                        if m_entry["last_used_at"] is None or ts_iso > m_entry["last_used_at"]:
+                            m_entry["last_used_at"] = ts_iso
+                        if ts >= cut_1w:
+                            _add_agy_win(m_entry["weekly"], p_cnt, s_cnt, inp, out, cache)
+                        if ts >= cut_today:
+                            _add_agy_win(m_entry["today"], p_cnt, s_cnt, inp, out, cache)
+                        if ts >= cut_5h:
+                            _add_agy_win(m_entry["five_hour"], p_cnt, s_cnt, inp, out, cache)
+
+                    if ts >= cut_1w:
+                        _add_agy_win(totals["weekly"], p_cnt, s_cnt, inp, out, cache)
+                    if ts >= cut_today:
+                        _add_agy_win(totals["today"], p_cnt, s_cnt, inp, out, cache)
+                    if ts >= cut_5h:
+                        _add_agy_win(totals["five_hour"], p_cnt, s_cnt, inp, out, cache)
+        except Exception:
+            continue
+
+    model_list = list(models.values())
+    for m_entry in model_list:
+        try:
+            update_day_track(m_entry, old_models_by_name.get(m_entry["name"]))
+        except Exception:
+            pass
+
+    return {
+        "as_of": now.isoformat(timespec="seconds") if got_cli else (old_agy.get("as_of") if isinstance(old_agy, dict) else None),
+        "source": "agy -p /usage" if got_cli else "agy cache",
+        "current_model": latest_model,
+        "totals": totals,
+        "models": model_list,
+        "error": sanitize(" / ".join(errors)) if errors else None,
+    }
+
+
+
 # ---------------------------------------------------------------- git
 def git(*args, check=True):
     env = dict(os.environ)
@@ -574,7 +815,7 @@ def main():
     ap.add_argument("--out", default=DEFAULT_OUT)
     ap.add_argument("--no-push", action="store_true")
     ap.add_argument("--debug", action="store_true")
-    ap.add_argument("--only", choices=["claude", "codex"])
+    ap.add_argument("--only", choices=["claude", "codex", "antigravity"])
     ap.add_argument("--try-claude-cli", action="store_true", help='claude -p "/usage" も試す（v2.1.220 では上限値は出ない）')
     ap.add_argument("--throttle-min", type=float, default=0, help="前回実行からこの分数未満なら何もせず終了")
     ap.add_argument("--reason", default="manual", help="ログ用の起動理由")
@@ -685,6 +926,46 @@ def update_day_track(svc, old_svc):
     }
 
 
+def export_browser_data(data, destination=None):
+    """file:// 用に公開表示項目だけを data/usage-local.js に書き出す。"""
+    if not isinstance(data, dict):
+        return
+    payload = {"fetched_at": data.get("fetched_at"), "services": {}}
+    for key in ("claude", "codex"):
+        raw = (data.get("services") or {}).get(key) or {}
+        service = {"as_of": raw.get("as_of")}
+        for name in ("five_hour", "weekly"):
+            window = raw.get(name) or {}
+            up = window.get("used_percent")
+            try:
+                up = float(up) if up is not None and not isinstance(up, bool) else None
+                if up is not None and (not math.isfinite(up) or up < 0 or up > 100):
+                    up = None
+            except (TypeError, ValueError):
+                up = None
+            service[name] = {"used_percent": up, "resets_at": window.get("resets_at")}
+        for name in ("reset_count", "reset_count_expires_at"):
+            if name in raw:
+                service[name] = raw[name]
+        payload["services"][key] = service
+
+    agy_raw = (data.get("services") or {}).get("antigravity")
+    if isinstance(agy_raw, dict):
+        payload["services"]["antigravity"] = {
+            "as_of": agy_raw.get("as_of"),
+            "current_model": agy_raw.get("current_model"),
+            "totals": agy_raw.get("totals"),
+            "models": agy_raw.get("models") or [],
+        }
+
+    destination = destination or os.path.join(os.path.dirname(os.path.abspath(DEFAULT_OUT)), "usage-local.js")
+    text = "window.AI_USAGE_LOCAL = " + json.dumps(payload, ensure_ascii=True, allow_nan=False) + ";\n"
+    temporary = destination + ".tmp"
+    with open(temporary, "w", encoding="utf-8", newline="\n") as stream:
+        stream.write(text)
+    os.replace(temporary, destination)
+
+
 def run(a):
     data = {"schema": 1, "fetched_at": None, "services": {}}
     old = {}
@@ -711,6 +992,25 @@ def run(a):
         except Exception as e:
             log("day_track error (%s): %s" % (name, e))
         log("%s: %s" % (name, json.dumps(data["services"][name], ensure_ascii=False)))
+
+    # Antigravity モデル別使用状況
+    if a.only and a.only != "antigravity":
+        if "antigravity" in old:
+            data["services"]["antigravity"] = old["antigravity"]
+    else:
+        try:
+            data["services"]["antigravity"] = collect_antigravity(old_agy=old.get("antigravity"))
+        except Exception as e:
+            data["services"]["antigravity"] = {
+                "as_of": None,
+                "source": "Antigravity local transcript logs",
+                "current_model": None,
+                "totals": {},
+                "models": [],
+                "error": sanitize("unexpected: %s" % e),
+            }
+        log("antigravity: %d models" % len(data["services"]["antigravity"].get("models") or []))
+
     data["fetched_at"] = dt.datetime.now(JST).isoformat(timespec="seconds")
 
     txt = json.dumps(data, ensure_ascii=False, indent=2)
@@ -721,6 +1021,11 @@ def run(a):
     with open(tmp, "w", encoding="utf-8", newline="\n") as f:
         f.write(txt + "\n")
     os.replace(tmp, a.out)
+    try:
+        local_js = os.path.join(os.path.dirname(os.path.abspath(a.out)), "usage-local.js")
+        export_browser_data(data, local_js)
+    except Exception as e:
+        log("export_browser_data error: %s" % e)
     if not a.no_push:
         try:
             push(a.out)

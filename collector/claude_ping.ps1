@@ -1,4 +1,4 @@
-﻿# Claude Pro usage via statusLine: start a short interactive claude in a trusted Temp folder.
+# Claude Pro usage via statusLine: start a short interactive claude in a trusted Temp folder.
 param([int]$TimeoutSec = 120, [switch]$IfUsed)
 $ErrorActionPreference = 'Continue'
 $state = Join-Path $env:LOCALAPPDATA 'ai-usage-dashboard'
@@ -24,21 +24,36 @@ if ($IfUsed) {
 }
 Set-Content -LiteralPath $stamp -Value (Get-Date -Format s) -Encoding UTF8
 $before = if (Test-Path -LiteralPath $cachePath) { (Get-Item -LiteralPath $cachePath).LastWriteTimeUtc } else { [datetime]::MinValue }
-$claude = (Get-Command claude.cmd -ErrorAction SilentlyContinue).Source
-if (-not $claude) { L 'claude.cmd not found'; exit 1 }
-# npm shim calls bin\claude.exe; a failed update can leave only .old
-$claudeExe = Join-Path $env:APPDATA 'npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe'
-if (-not (Test-Path -LiteralPath $claudeExe)) {
-  $old = Get-ChildItem (Split-Path $claudeExe) -Filter 'claude.exe.old.*' -ErrorAction SilentlyContinue |
+
+# Resolve claude executable: 1) Claude Desktop claude-code binary, 2) PATH claude.cmd/exe, 3) npm global
+$claude = $null
+$desktopClaudeDir = Join-Path $env:APPDATA 'Claude\claude-code'
+if (Test-Path -LiteralPath $desktopClaudeDir) {
+  $newestExe = Get-ChildItem -LiteralPath $desktopClaudeDir -Filter 'claude.exe' -Recurse -File -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1
-  if ($old) {
-    Copy-Item -LiteralPath $old.FullName -Destination $claudeExe -Force
-    L ('restored claude.exe from {0}' -f $old.Name)
-  } else {
-    L ('claude.exe missing ({0}). Fix: npm install -g @anthropic-ai/claude-code' -f $claudeExe)
-    exit 1
-  }
+  if ($newestExe) { $claude = $newestExe.FullName }
 }
+if (-not $claude) {
+  $cmd = Get-Command claude.cmd, claude.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($cmd) { $claude = $cmd.Source }
+}
+if (-not $claude) {
+  $claudeExe = Join-Path $env:APPDATA 'npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe'
+  if (-not (Test-Path -LiteralPath $claudeExe)) {
+    $old = Get-ChildItem (Split-Path $claudeExe) -Filter 'claude.exe.old.*' -ErrorAction SilentlyContinue |
+      Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($old) {
+      Copy-Item -LiteralPath $old.FullName -Destination $claudeExe -Force
+      L ('restored claude.exe from {0}' -f $old.Name)
+    }
+  }
+  if (Test-Path -LiteralPath $claudeExe) { $claude = $claudeExe }
+}
+if (-not $claude) {
+  L 'claude executable not found'
+  exit 1
+}
+
 function Invoke-ClaudeStatuslinePing {
   param([datetime]$BeforeUtc, [int]$Seconds)
   $env:AIUSAGE_PING = '1'
@@ -72,4 +87,4 @@ L ('statusline updated={0}' -f $ok)
 # wait (max 90s) if another collector holds the lock, so fresh statusline is not skipped
 $lock = Join-Path $state 'collector.lock'
 for ($i = 0; $i -lt 45 -and (Test-Path -LiteralPath $lock); $i++) { Start-Sleep -Seconds 2 }
-& $py (Join-Path $PSScriptRoot 'collector.py') --reason claude-ping | Out-Null
+& $py (Join-Path $PSScriptRoot 'collector.py') --reason claude-ping --no-push | Out-Null
