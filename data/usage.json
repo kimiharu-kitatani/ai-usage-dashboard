@@ -1,20 +1,20 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-08T03:40:22+09:00",
+  "fetched_at": "2026-11-08T23:38:07+09:00",
   "services": {
     "claude": {
       "five_hour": {
-        "used_percent": 13.0,
-        "resets_at": "2026-11-08T06:10:00+09:00"
+        "used_percent": null,
+        "resets_at": null
       },
       "weekly": {
-        "used_percent": 71.0,
+        "used_percent": 72.0,
         "resets_at": "2026-11-09T09:00:00+09:00"
       },
       "reset_count": null,
       "source": "Claude Code statusline (最後に Claude Code を使った時点の値)",
-      "as_of": "2026-11-08T03:07:29+09:00",
-      "error": null,
+      "as_of": "2026-11-08T03:40:14+09:00",
+      "error": "5時間枠は記録後にリセット済み（次回利用時に更新）",
       "day_track": {
         "week_start": "2026-11-02T09:00:00+09:00",
         "day_start_used": {
@@ -23,23 +23,24 @@
           "3": 9.0,
           "4": 9.0,
           "5": 45.0,
-          "6": 59.0
+          "6": 59.0,
+          "7": 72.0
         },
-        "last_weekly_used": 71.0
+        "last_weekly_used": 72.0
       }
     },
     "codex": {
       "five_hour": {
-        "used_percent": 0.0,
-        "resets_at": "2026-11-08T08:40:13+09:00"
+        "used_percent": 32.0,
+        "resets_at": "2026-11-09T04:34:07+09:00"
       },
       "weekly": {
-        "used_percent": 68.0,
+        "used_percent": 73.0,
         "resets_at": "2026-11-10T08:05:13+09:00"
       },
       "reset_count": 2,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-08T03:40:13+09:00",
+      "as_of": "2026-11-08T23:37:53+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-01T03:56:01+09:00",
       "day_track": {
@@ -48,13 +49,14 @@
           "1": 0.0,
           "3": 16.0,
           "4": 48.0,
-          "5": 57.0
+          "5": 57.0,
+          "6": 68.0
         },
-        "last_weekly_used": 68.0
+        "last_weekly_used": 73.0
       }
     },
     "antigravity": {
-      "as_of": "2026-11-08T03:40:13+09:00",
+      "as_of": "2026-11-08T23:37:53+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini 3.8 Flash (Medium)",
       "totals": {
@@ -84,12 +86,12 @@
           "used_percent": null,
           "remain_percent": null,
           "resets_at": null,
-          "prompts": 394,
-          "steps": 6233,
-          "input_tokens": 35710926,
-          "output_tokens": 2910525,
-          "cache_read_tokens": 734710334,
-          "total_tokens": 38621451
+          "prompts": 299,
+          "steps": 5086,
+          "input_tokens": 28420821,
+          "output_tokens": 2360483,
+          "cache_read_tokens": 590527463,
+          "total_tokens": 30781304
         }
       },
       "models": [
@@ -99,7 +101,7 @@
           "five_hour": {
             "used_percent": 0.0,
             "remain_percent": 100.0,
-            "resets_at": "2026-11-08T08:40:20+09:00",
+            "resets_at": "2026-11-09T04:38:01+09:00",
             "prompts": 0,
             "steps": 0,
             "input_tokens": 0,
@@ -122,18 +124,19 @@
             "used_percent": 4.0,
             "remain_percent": 96.0,
             "resets_at": "2026-11-14T12:06:09+09:00",
-            "prompts": 370,
-            "steps": 6108,
-            "input_tokens": 34719369,
-            "output_tokens": 2823969,
-            "cache_read_tokens": 717806964,
-            "total_tokens": 37543338
+            "prompts": 275,
+            "steps": 4961,
+            "input_tokens": 27429264,
+            "output_tokens": 2273927,
+            "cache_read_tokens": 573624093,
+            "total_tokens": 29703191
           },
           "last_used_at": "2026-11-07T21:58:37+09:00",
           "day_track": {
             "week_start": "2026-11-07T12:06:09+09:00",
             "day_start_used": {
-              "1": 0.0
+              "1": 0.0,
+              "2": 4.0
             },
             "last_weekly_used": 4.0
           }
@@ -180,7 +183,8 @@
             "day_start_used": {
               "4": null,
               "5": 71.0,
-              "6": 71.0
+              "6": 71.0,
+              "7": 100.0
             },
             "last_weekly_used": 100.0
           }
@@ -213,17 +217,17 @@
           "weekly": {
             "used_percent": 0.0,
             "remain_percent": 100.0,
-            "resets_at": "2026-11-15T03:40:20+09:00",
-            "prompts": 47,
-            "steps": 767,
-            "input_tokens": 7079457,
-            "output_tokens": 461598,
-            "cache_read_tokens": 80470904,
-            "total_tokens": 7541055
+            "resets_at": "2026-11-15T23:38:01+09:00",
+            "prompts": 46,
+            "steps": 720,
+            "input_tokens": 6562321,
+            "output_tokens": 439704,
+            "cache_read_tokens": 78786429,
+            "total_tokens": 7002025
           },
           "last_used_at": "2026-11-06T01:49:33+09:00",
           "day_track": {
-            "week_start": "2026-11-08T03:40:20+09:00",
+            "week_start": "2026-11-08T23:38:01+09:00",
             "day_start_used": {
               "1": 0.0
             },
