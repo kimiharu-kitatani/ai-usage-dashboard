@@ -1283,8 +1283,15 @@ async function load() {
   try {
     if(location.protocol==='file:') DATA=await loadLocalData();
     else {
-      const res=await fetch('data/usage.json?ts='+Date.now(),{cache:'no-store'});
-      if(!res.ok)throw new Error('HTTP '+res.status);
+      let res;
+      try {
+        res = await fetch('data/usage.json?ts='+Date.now(),{cache:'no-store'});
+        if(!res.ok) throw new Error('HTTP '+res.status);
+      } catch(fetchErr) {
+        // 同一オリジンで取得できない場合（Xserver等からの参照）、GitHub Pagesの最新データへフォールバック
+        res = await fetch('https://kimiharu-kitatani.github.io/ai-usage-dashboard/data/usage.json?ts='+Date.now(),{cache:'no-store'});
+        if(!res.ok) throw fetchErr;
+      }
       DATA=await res.json();
     }
   } catch(e) {
