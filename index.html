@@ -180,6 +180,7 @@ body.expanded #top3{display:block}
 .agy-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;cursor:pointer}
 .agy-title{font-weight:700;font-size:13px;display:inline-flex;align-items:center;gap:4px}
 .agy-cur{font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;background:rgba(37,99,235,.12);color:var(--accent);border:1px solid rgba(37,99,235,.28)}
+.agy-subtabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:6px 0 10px;background:#e8edf3;border-radius:10px;padding:4px}.agy-subtabs button{border:0;background:none;border-radius:8px;padding:7px 2px;font-size:12px;font-weight:700;color:var(--muted);font-family:inherit;white-space:nowrap}.agy-subtabs button.active{background:var(--card,#fff);color:#2563eb;box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .agy-sum{margin-left:auto;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
 .agy-models-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%}
 @media (max-width:520px){.agy-models-strip{grid-template-columns:1fr}}
@@ -788,7 +789,8 @@ function renderAntigravity(strip, det, wrap) {
     subLine.append(cdSpan, wkSpan);
     mCol.appendChild(subLine);
     mCol.addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
-    mGrid.appendChild(mCol);
+    mCol.dataset.agy = mKey;
+  mGrid.appendChild(mCol);
 
     const wD = m.today || {}, wW = m.weekly || {};
     const srcParts = [];
@@ -797,13 +799,32 @@ function renderAntigravity(strip, det, wrap) {
     card.querySelector(".src").textContent = srcParts.join(" ／ ");
     card.querySelector(".open-manual").addEventListener("click", () => openManual({ key: mKey, name: "Antigravity — " + m.name }));
     if (man) card.querySelector(".open-manual").insertAdjacentHTML("beforeend", '<span class="badge">保存済</span>');
+    card.dataset.agy = mKey;
     cardsWrap.appendChild(card);
   });
 
   st.appendChild(mGrid);
   strip.appendChild(st);
   det.appendChild(dsv);
+  // Antigravity のモデルを3つのサブタブで切り替え
+  const AGY_TABS = [["agy_gemini_models", "ジェミニモデルズ"], ["agy_claude_and_gpt_models", "クロード&GPTモデルズ"], ["agy_gemini_4_argon", "ジェミニ4アルゴン"]];
+  const agyTabs = document.createElement("div");
+  agyTabs.className = "agy-subtabs";
+  AGY_TABS.forEach(([k, label]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.k = k;
+    b.textContent = label;
+    b.addEventListener("click", () => showAgy(k));
+    agyTabs.appendChild(b);
+  });
+  const showAgy = (k) => {
+    agyTabs.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.k === k));
+    [st, cardsWrap].forEach(root => root.querySelectorAll("[data-agy]").forEach(e => { e.style.display = (e.dataset.agy === k) ? "" : "none"; }));
+  };
+  wrap.appendChild(agyTabs);
   wrap.appendChild(cardsWrap);
+  showAgy(AGY_TABS[0][0]);
 }
 
 function renderTop3(det) {
