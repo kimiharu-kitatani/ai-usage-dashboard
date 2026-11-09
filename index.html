@@ -807,7 +807,7 @@ function renderAntigravity(strip, det, wrap) {
   strip.appendChild(st);
   det.appendChild(dsv);
   // Antigravity のモデルを3つのサブタブで切り替え
-  const AGY_TABS = [["agy_gemini_models", "ジェミニモデルズ"], ["agy_claude_and_gpt_models", "クロード&GPTモデルズ"], ["agy_gemini_4_argon", "ジェミニ4アルゴン"]];
+  const AGY_TABS = [["agy_gemini_models", "Gemini"], ["agy_claude_and_gpt_models", "Claude＆GPT"], ["agy_gemini_4_argon", "Argon"]];
   const agyTabs = document.createElement("div");
   agyTabs.className = "agy-subtabs";
   AGY_TABS.forEach(([k, label]) => {
