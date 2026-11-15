@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-15T20:16:41+09:00",
+  "fetched_at": "2026-11-15T20:26:42+09:00",
   "services": {
     "claude": {
       "five_hour": {
@@ -31,20 +31,20 @@
     },
     "codex": {
       "five_hour": {
-        "used_percent": 28.0,
+        "used_percent": 38.0,
         "resets_at": "2026-11-16T00:42:31+09:00"
       },
       "weekly": {
-        "used_percent": 49.0,
-        "resets_at": "2026-11-17T08:41:29+09:00"
+        "used_percent": 50.0,
+        "resets_at": "2026-11-17T08:41:30+09:00"
       },
       "reset_count": 3,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-15T20:16:33+09:00",
+      "as_of": "2026-11-15T20:26:34+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-01T03:56:01+09:00",
       "day_track": {
-        "week_start": "2026-11-10T08:41:29+09:00",
+        "week_start": "2026-11-10T08:41:30+09:00",
         "day_start_used": {
           "1": 0.0,
           "2": 16.0,
@@ -53,11 +53,11 @@
           "5": 45.0,
           "6": 45.0
         },
-        "last_weekly_used": 49.0
+        "last_weekly_used": 50.0
       }
     },
     "antigravity": {
-      "as_of": "2026-11-15T20:16:33+09:00",
+      "as_of": "2026-11-15T20:26:34+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini 3.8 Flash (Medium)",
       "totals": {
@@ -102,7 +102,7 @@
           "five_hour": {
             "used_percent": 0.0,
             "remain_percent": 100.0,
-            "resets_at": "2026-11-16T01:16:40+09:00",
+            "resets_at": "2026-11-16T01:26:40+09:00",
             "prompts": 0,
             "steps": 0,
             "input_tokens": 0,
@@ -148,7 +148,7 @@
           "five_hour": {
             "used_percent": 0.0,
             "remain_percent": 100.0,
-            "resets_at": "2026-11-16T01:16:40+09:00",
+            "resets_at": "2026-11-16T01:26:40+09:00",
             "prompts": 0,
             "steps": 0,
             "input_tokens": 0,
