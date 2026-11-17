@@ -1,19 +1,19 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-17T10:33:36+09:00",
+  "fetched_at": "2026-11-17T10:51:42+09:00",
   "services": {
     "claude": {
       "five_hour": {
-        "used_percent": 41.0,
+        "used_percent": 49.0,
         "resets_at": "2026-11-17T14:10:00+09:00"
       },
       "weekly": {
-        "used_percent": 7.0,
+        "used_percent": 9.0,
         "resets_at": "2026-11-23T09:00:00+09:00"
       },
       "reset_count": null,
       "source": "Claude Code statusline (最後に Claude Code を使った時点の値)",
-      "as_of": "2026-11-17T10:22:59+09:00",
+      "as_of": "2026-11-17T10:33:30+09:00",
       "error": null,
       "day_track": {
         "week_start": "2026-11-16T09:00:00+09:00",
@@ -21,7 +21,7 @@
           "1": 0.0,
           "2": 2.0
         },
-        "last_weekly_used": 7.0
+        "last_weekly_used": 9.0
       }
     },
     "codex": {
@@ -35,7 +35,7 @@
       },
       "reset_count": 3,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-17T10:33:29+09:00",
+      "as_of": "2026-11-17T10:51:34+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-01T03:56:01+09:00",
       "day_track": {
@@ -47,7 +47,7 @@
       }
     },
     "antigravity": {
-      "as_of": "2026-11-17T10:33:29+09:00",
+      "as_of": "2026-11-17T10:51:34+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini 3.8 Flash (Medium)",
       "totals": {
@@ -140,7 +140,7 @@
           "five_hour": {
             "used_percent": 0.0,
             "remain_percent": 100.0,
-            "resets_at": "2026-11-17T15:33:34+09:00",
+            "resets_at": "2026-11-17T15:51:40+09:00",
             "prompts": 0,
             "steps": 0,
             "input_tokens": 0,
@@ -162,7 +162,7 @@
           "weekly": {
             "used_percent": 0.0,
             "remain_percent": 100.0,
-            "resets_at": "2026-11-24T10:33:34+09:00",
+            "resets_at": "2026-11-24T10:51:40+09:00",
             "prompts": 18,
             "steps": 78,
             "input_tokens": 1138913,
@@ -172,7 +172,7 @@
           },
           "last_used_at": "2026-11-16T08:49:09+09:00",
           "day_track": {
-            "week_start": "2026-11-17T10:33:34+09:00",
+            "week_start": "2026-11-17T10:51:40+09:00",
             "day_start_used": {
               "1": 0.0
             },
