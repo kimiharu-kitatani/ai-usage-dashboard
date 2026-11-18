@@ -1,19 +1,19 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-18T10:47:35+09:00",
+  "fetched_at": "2026-11-18T10:57:45+09:00",
   "services": {
     "claude": {
       "five_hour": {
-        "used_percent": 21.0,
+        "used_percent": 25.0,
         "resets_at": "2026-11-18T13:40:00+09:00"
       },
       "weekly": {
-        "used_percent": 12.0,
+        "used_percent": 13.0,
         "resets_at": "2026-11-23T09:00:00+09:00"
       },
       "reset_count": null,
       "source": "Claude Code statusline (最後に Claude Code を使った時点の値)",
-      "as_of": "2026-11-18T10:05:41+09:00",
+      "as_of": "2026-11-18T10:49:01+09:00",
       "error": null,
       "day_track": {
         "week_start": "2026-11-16T09:00:00+09:00",
@@ -22,21 +22,21 @@
           "2": 2.0,
           "3": 10.0
         },
-        "last_weekly_used": 12.0
+        "last_weekly_used": 13.0
       }
     },
     "codex": {
       "five_hour": {
-        "used_percent": 3.0,
+        "used_percent": 8.0,
         "resets_at": "2026-11-18T15:12:56+09:00"
       },
       "weekly": {
-        "used_percent": 1.0,
+        "used_percent": 2.0,
         "resets_at": "2026-11-24T09:05:14+09:00"
       },
       "reset_count": 3,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-18T10:47:23+09:00",
+      "as_of": "2026-11-18T10:57:33+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-01T03:56:01+09:00",
       "day_track": {
@@ -45,11 +45,11 @@
           "1": 0.0,
           "2": 1.0
         },
-        "last_weekly_used": 1.0
+        "last_weekly_used": 2.0
       }
     },
     "antigravity": {
-      "as_of": "2026-11-18T10:47:23+09:00",
+      "as_of": "2026-11-18T10:57:33+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini 3.8 Flash (Medium)",
       "totals": {
