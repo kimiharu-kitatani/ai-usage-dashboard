@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-18T21:41:44+09:00",
+  "fetched_at": "2026-11-18T22:09:26+09:00",
   "services": {
     "claude": {
       "five_hour": {
@@ -27,16 +27,16 @@
     },
     "codex": {
       "five_hour": {
-        "used_percent": 33.0,
-        "resets_at": "2026-11-19T02:03:24+09:00"
+        "used_percent": 39.0,
+        "resets_at": "2026-11-19T02:03:25+09:00"
       },
       "weekly": {
-        "used_percent": 23.0,
+        "used_percent": 24.0,
         "resets_at": "2026-11-24T09:05:14+09:00"
       },
       "reset_count": 3,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-18T21:41:38+09:00",
+      "as_of": "2026-11-18T22:09:19+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-01T03:56:01+09:00",
       "day_track": {
@@ -45,11 +45,11 @@
           "1": 0.0,
           "2": 1.0
         },
-        "last_weekly_used": 23.0
+        "last_weekly_used": 24.0
       }
     },
     "antigravity": {
-      "as_of": "2026-11-18T21:41:38+09:00",
+      "as_of": "2026-11-18T22:09:19+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini 3.8 Flash (Medium)",
       "totals": {
@@ -57,12 +57,12 @@
           "used_percent": null,
           "remain_percent": null,
           "resets_at": null,
-          "prompts": 28,
-          "steps": 421,
-          "input_tokens": 2874480,
-          "output_tokens": 193211,
-          "cache_read_tokens": 55298319,
-          "total_tokens": 3067691
+          "prompts": 24,
+          "steps": 400,
+          "input_tokens": 2367188,
+          "output_tokens": 181008,
+          "cache_read_tokens": 50906392,
+          "total_tokens": 2548196
         },
         "today": {
           "used_percent": null,
@@ -95,12 +95,12 @@
             "used_percent": 2.0,
             "remain_percent": 98.0,
             "resets_at": "2026-11-19T01:53:53+09:00",
-            "prompts": 21,
-            "steps": 389,
-            "input_tokens": 1986311,
-            "output_tokens": 171732,
-            "cache_read_tokens": 49357933,
-            "total_tokens": 2158043
+            "prompts": 17,
+            "steps": 368,
+            "input_tokens": 1479019,
+            "output_tokens": 159529,
+            "cache_read_tokens": 44966006,
+            "total_tokens": 1638548
           },
           "today": {
             "used_percent": null,
