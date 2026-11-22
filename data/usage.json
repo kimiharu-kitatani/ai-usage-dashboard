@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-22T13:10:07+09:00",
+  "fetched_at": "2026-11-22T19:27:03+09:00",
   "services": {
     "claude": {
       "five_hour": {
@@ -31,8 +31,8 @@
     },
     "codex": {
       "five_hour": {
-        "used_percent": 100.0,
-        "resets_at": "2026-11-22T15:52:33+09:00"
+        "used_percent": 0.0,
+        "resets_at": "2026-11-23T00:26:53+09:00"
       },
       "weekly": {
         "used_percent": 58.0,
@@ -40,7 +40,7 @@
       },
       "reset_count": 3,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-22T13:09:59+09:00",
+      "as_of": "2026-11-22T19:26:54+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-01T03:56:01+09:00",
       "day_track": {
@@ -57,7 +57,7 @@
       }
     },
     "antigravity": {
-      "as_of": "2026-11-22T13:09:59+09:00",
+      "as_of": "2026-11-22T19:26:54+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini 4 Hydrogen (Medium)",
       "totals": {
@@ -102,7 +102,7 @@
           "five_hour": {
             "used_percent": 0.0,
             "remain_percent": 100.0,
-            "resets_at": "2026-11-22T18:10:05+09:00",
+            "resets_at": "2026-11-23T00:27:01+09:00",
             "prompts": 0,
             "steps": 0,
             "input_tokens": 0,
@@ -136,7 +136,8 @@
           "day_track": {
             "week_start": "2026-11-21T18:45:48+09:00",
             "day_start_used": {
-              "1": 0.0
+              "1": 0.0,
+              "2": 1.0
             },
             "last_weekly_used": 1.0
           }
@@ -147,7 +148,7 @@
           "five_hour": {
             "used_percent": 0.0,
             "remain_percent": 100.0,
-            "resets_at": "2026-11-22T18:10:05+09:00",
+            "resets_at": "2026-11-23T00:27:01+09:00",
             "prompts": 0,
             "steps": 0,
             "input_tokens": 0,
@@ -218,7 +219,7 @@
           "weekly": {
             "used_percent": 0.0,
             "remain_percent": 100.0,
-            "resets_at": "2026-11-29T13:10:05+09:00",
+            "resets_at": "2026-11-29T19:27:01+09:00",
             "prompts": 12,
             "steps": 191,
             "input_tokens": 1641624,
@@ -228,7 +229,7 @@
           },
           "last_used_at": "2026-11-21T14:28:03+09:00",
           "day_track": {
-            "week_start": "2026-11-22T13:10:05+09:00",
+            "week_start": "2026-11-22T19:27:01+09:00",
             "day_start_used": {
               "1": 0.0
             },
