@@ -1,5 +1,5 @@
 # Claude Pro usage via statusLine: start a short interactive claude in a trusted Temp folder.
-param([int]$TimeoutSec = 120, [switch]$IfUsed)
+param([int]$TimeoutSec = 120, [switch]$IfUsed, [switch]$OnlyClaude)
 $ErrorActionPreference = 'Continue'
 $state = Join-Path $env:LOCALAPPDATA 'ai-usage-dashboard'
 $work  = Join-Path $env:TEMP 'aiusage-claude-ping'  # trusted; no trust prompt
@@ -81,10 +81,11 @@ $ok = Invoke-ClaudeStatuslinePing -BeforeUtc $before -Seconds $TimeoutSec
 if (-not $ok) {
   L 'statusline updated=False; retrying once'
   $before2 = if (Test-Path -LiteralPath $cachePath) { (Get-Item -LiteralPath $cachePath).LastWriteTimeUtc } else { [datetime]::MinValue }
-  $ok = Invoke-ClaudeStatuslinePing -BeforeUtc $before2 -Seconds ([Math]::Max(60, [int]($TimeoutSec / 2)))
+  $ok = Invoke-ClaudeStatuslinePing -BeforeUtc $before2 -Seconds ([Math]::Max(25, [int]($TimeoutSec / 2)))
 }
 L ('statusline updated={0}' -f $ok)
 # wait (max 90s) if another collector holds the lock, so fresh statusline is not skipped
 $lock = Join-Path $state 'collector.lock'
 for ($i = 0; $i -lt 45 -and (Test-Path -LiteralPath $lock); $i++) { Start-Sleep -Seconds 2 }
-& $py (Join-Path $PSScriptRoot 'collector.py') --reason claude-ping --no-push | Out-Null
+$onlyArgs = if ($OnlyClaude) { @('--only', 'claude') } else { @() }
+& $py (Join-Path $PSScriptRoot 'collector.py') --reason claude-ping --no-push @onlyArgs | Out-Null

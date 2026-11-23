@@ -79,6 +79,24 @@
   .err { color: var(--bad); font-size: 10px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .note:empty, .err:empty, .src:empty, .sub:empty { display: none; }
   .actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  /* 進行状況スライダーバー */
+  #prog-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 9999; background: #111827; color: #fff; padding: 8px 14px 10px; box-shadow: 0 3px 12px rgba(0,0,0,.4); }
+  #prog-banner[hidden] { display: none; }
+  #prog-banner.done { background: #064e3b; border-bottom: 3px solid #10b981; }
+  #prog-banner.error { background: #7f1d1d; border-bottom: 3px solid #ef4444; }
+  #prog-banner .prog-track { height: 12px; border-radius: 6px; background: #374151; overflow: hidden; }
+  #prog-banner .prog-fill { height: 100%; width: 0; border-radius: 6px; background: #22c55e; background-image: linear-gradient(45deg,rgba(255,255,255,.3) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.3) 50%,rgba(255,255,255,.3) 75%,transparent 75%); background-size: 24px 24px; animation: progstripe .8s linear infinite; transition: width .25s; }
+  #prog-banner.done .prog-fill, #prog-banner.error .prog-fill { animation: none; background-image: none; }
+  #prog-banner.error .prog-fill { background: #ef4444; }
+  #prog-banner .prog-text { font-size: 12.5px; font-weight: 700; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  #prog-banner .prog-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: 11.5px; }
+  #prog-banner .prog-links[hidden] { display: none; }
+  #prog-banner .prog-links a { color: #fff; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.35); border-radius: 6px; padding: 4px 8px; text-decoration: none; font-weight: 600; }
+  #prog-banner .prog-links .prog-note { color: #fca5a5; font-size: 11px; }
+  #prog-banner .prog-links button { margin-left: auto; background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.3); border-radius: 6px; padding: 3px 8px; font-size: 11px; cursor: pointer; }
+  @keyframes progstripe { from { background-position: 0 0; } to { background-position: 24px 0; } }
+  .btn-fetch { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+  .btn-fetch:disabled { opacity: .55; cursor: wait; }
   dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text); padding: 12px; width: min(360px, 94vw); }
   dialog::backdrop { background: rgba(0,0,0,.45); }
   dialog h3 { font-size: 14px; margin: 0 0 6px; }
@@ -181,6 +199,11 @@ body.expanded #top3{display:block}
 .agy-title{font-weight:700;font-size:13px;display:inline-flex;align-items:center;gap:4px}
 .agy-cur{font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;background:rgba(37,99,235,.12);color:var(--accent);border:1px solid rgba(37,99,235,.28)}
 .agy-subtabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:6px 0 10px;background:#e8edf3;border-radius:10px;padding:4px}.agy-subtabs button{border:0;background:none;border-radius:8px;padding:7px 2px;font-size:12px;font-weight:700;color:var(--muted);font-family:inherit;white-space:nowrap}.agy-subtabs button.active{background:var(--card,#fff);color:#2563eb;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+@media (min-width: 700px) {
+  /* PC表示ではサブタブ切り替えを非表示にし、全モデルカード（Gemini / Claude＆GPT / Argon）を常に全表示 */
+  .agy-subtabs { display: none !important; }
+  .agy-cards-wrap [data-agy] { display: block !important; }
+}
 .agy-sum{margin-left:auto;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
 .agy-models-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%}
 @media (max-width:520px){.agy-models-strip{grid-template-columns:1fr}}
@@ -414,6 +437,11 @@ body.expanded #top3{display:block}
 </style>
 </head>
 <body class="expanded">
+<div id="prog-banner" role="status" aria-live="polite" hidden>
+  <div class="prog-track"><div class="prog-fill" id="prog-fill"></div></div>
+  <div class="prog-text" id="prog-text"></div>
+  <div class="prog-links" id="prog-links" hidden></div>
+</div>
 <main>
   <header>
     <h1>AI使用量</h1>
@@ -423,7 +451,7 @@ body.expanded #top3{display:block}
     <label class="chk-5h" title="全モデルの5時間枠の表示・非表示を切り替え"><input type="checkbox" id="hshow5h">5h枠を表示</label>
     <a class="btn" href="help.html" title="計算の見方">?</a>
     <button id="htoggle" type="button">コンパクト ▲</button>
-    <button id="reload" type="button" aria-label="再読み込み">↻</button>
+    <button id="reload" type="button" class="btn-fetch" title="3サービスすべて最新取得（目安 25秒）">↻ 全更新</button>
   </header>
   <!-- スマホ用タブバー（PCでは非表示） -->
   <nav class="swipe-tabs" id="swipe-tabs" aria-label="モデル切り替え">
@@ -456,6 +484,7 @@ body.expanded #top3{display:block}
     <div class="err"></div>
     <div class="src"></div>
     <div class="actions">
+      <button type="button" class="btn-fetch refresh-svc">↻ 最新取得</button>
       <a class="btn primary official" target="_blank" rel="noopener">公式 ↗</a>
       <button type="button" class="open-manual">✎ 手入力</button>
     </div>
@@ -660,6 +689,14 @@ function renderAntigravity(strip, det, wrap) {
     ? "今日 " + (tDay.prompts || 0) + "回/" + (tDay.steps || 0) + "s (" + fmtTok(tDay.total_tokens) + ") · 1週 " + (tWk.prompts || 0) + "回/" + (tWk.steps || 0) + "s (" + fmtTok(tWk.total_tokens) + ")"
     : (asOf ? "取得 " + fmt(asOf) : "");
   head.appendChild(sum);
+  const agyFetchBtn = document.createElement("button");
+  agyFetchBtn.type = "button";
+  agyFetchBtn.className = "btn-fetch";
+  agyFetchBtn.dataset.fetchTarget = "antigravity";
+  agyFetchBtn.textContent = "↻ 最新取得";
+  agyFetchBtn.title = "Antigravity の最新情報を取得（目安 8秒）";
+  agyFetchBtn.addEventListener("click", (ev) => { ev.stopPropagation(); refreshService("antigravity", agyFetchBtn); });
+  head.appendChild(agyFetchBtn);
   head.addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
   st.appendChild(head);
 
@@ -694,7 +731,8 @@ function renderAntigravity(strip, det, wrap) {
       '<div class="card-head"><h2 class="name"></h2><span class="plan">Antigravity</span></div>' +
       '<div class="rows"></div>' +
       '<div class="src"></div>' +
-      '<div class="actions"><button type="button" class="open-manual">✎ 手入力</button></div>';
+      '<div class="actions"><button type="button" class="btn-fetch refresh-agy-card" data-fetch-target="antigravity">↻ 最新取得</button><button type="button" class="open-manual">✎ 手入力</button></div>';
+    card.querySelector(".refresh-agy-card").addEventListener("click", (ev) => refreshService("antigravity", ev.currentTarget));
     card.querySelector(".name").textContent = m.name;
     const cRows = card.querySelector(".rows");
     const show5h = isShow5h();
@@ -1104,6 +1142,9 @@ function render() {
     const gTop = document.createElement("div"); gTop.className = "mg-top";
     gTop.innerHTML = ICONS[s.key];
     const compactName=document.createElement('span');compactName.textContent=s.key==='claude'?'Claude Code':'Codex';gTop.appendChild(compactName);
+    const cFetch=document.createElement('button');cFetch.type='button';cFetch.className='btn-fetch';cFetch.style.cssText='margin-left:auto;padding:1px 6px;font-size:10px';cFetch.dataset.fetchTarget=s.key;cFetch.textContent='↻ 取得';
+    cFetch.addEventListener('click',ev=>{ev.stopPropagation();refreshService(s.key,cFetch);});
+    gTop.appendChild(cFetch);
     g.appendChild(gTop);
     const gBars = document.createElement("div"); gBars.className = "mg-bars";
     const dv = document.createElement("div"); dv.className = "dsv"; dv.innerHTML = ICONS[s.key] + "<div></div>";
@@ -1174,6 +1215,12 @@ function render() {
     errEl.title = auto.error || "";
     node.querySelector(".official").href = s.url;
     node.querySelector(".official").title = s.name + " の公式使用量ページ";
+    const rBtn = node.querySelector(".refresh-svc");
+    if (rBtn) {
+      rBtn.dataset.fetchTarget = s.key;
+      rBtn.title = s.name + " の最新情報を取得（目安 " + (s.key === "claude" ? "20秒" : "5秒") + "）";
+      rBtn.addEventListener("click", () => refreshService(s.key, rBtn));
+    }
     node.querySelector(".open-manual").addEventListener("click", () => openManual(s));
     if (man) node.querySelector(".open-manual").insertAdjacentHTML("beforeend", '<span class="badge">保存済</span>');
     const targetPane = s.key === 'claude' ? document.getElementById("pane-claude") : document.getElementById("pane-codex");
@@ -1208,7 +1255,7 @@ function render() {
   const hChk = document.getElementById("hshow5h");
   if (hChk) hChk.checked = isShow5h();
   mm.querySelector("#mtoggle").addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
-  mm.querySelector("#mreload").addEventListener("click", () => load());
+  mm.querySelector("#mreload").addEventListener("click", (ev) => refreshService("all", ev.currentTarget));
   setExpanded(document.body.classList.contains("expanded"), true);
   updateMeta();
 }
@@ -1322,7 +1369,156 @@ async function load() {
   render();
 }
 
-document.getElementById("reload").addEventListener("click", load);
+const REFRESH_META = {
+  claude: { label: "Claude Code", estSec: 20 },
+  codex: { label: "Codex", estSec: 5 },
+  antigravity: { label: "Antigravity", estSec: 8 },
+  all: { label: "全サービス (Claude / Codex / Antigravity)", estSec: 25 },
+};
+const LOCAL_API = "http://127.0.0.1:8768";
+const RELAY_API = "https://kick-in.xsrv.jp/ai-usage-relay/relay.php";
+const RELAY_TOKEN = "aiu_relay_2026_k9m4x7p2";
+let progTimer = null;
+let progHideTimer = null;
+
+function buildOfflineLinksHtml() {
+  return '<a href="https://claude.ai/settings/usage" target="_blank" rel="noopener">Claude 公式 ↗</a>'
+    + '<a href="https://chatgpt.com/codex/settings/usage" target="_blank" rel="noopener">Codex 公式 ↗</a>'
+    + '<span class="prog-note">AntigravityはPC専用（Web画面なし）</span>'
+    + '<button type="button" onclick="document.getElementById(\'prog-banner\').hidden=true">閉じる</button>';
+}
+
+function startProgress(label, estSec) {
+  const box = document.getElementById("prog-banner");
+  const fill = document.getElementById("prog-fill");
+  const text = document.getElementById("prog-text");
+  const links = document.getElementById("prog-links");
+  if (!box) return () => {};
+  if (progTimer) clearInterval(progTimer);
+  if (progHideTimer) clearTimeout(progHideTimer);
+  box.hidden = false;
+  box.className = "";
+  if (links) { links.hidden = true; links.innerHTML = ""; }
+  fill.style.width = "4%";
+  const t0 = Date.now();
+  let statusHint = "";
+  const update = () => {
+    const elapsed = Math.floor((Date.now() - t0) / 1000);
+    const pct = Math.min(94, Math.round((1 - Math.exp(-elapsed / (estSec * 0.7))) * 94) + 4);
+    fill.style.width = pct + "%";
+    const rem = Math.max(1, estSec - elapsed);
+    const hint = statusHint ? ` [${statusHint}]` : "";
+    text.textContent = `🔄 ${label} の最新情報を取得中… ${pct}%${hint} （経過 ${elapsed}秒 / 目安 約${estSec}秒・残り約${rem}秒）`;
+  };
+  update();
+  progTimer = setInterval(update, 300);
+  const ctrl = (ok, msg, showOfflineLinks = false) => {
+    if (progTimer) { clearInterval(progTimer); progTimer = null; }
+    fill.style.width = "100%";
+    box.className = ok ? "done" : "error";
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+    text.textContent = (ok ? "✅ " : "⚠ ") + msg + ` （${elapsed}秒）`;
+    if (links) {
+      if (showOfflineLinks) {
+        links.innerHTML = buildOfflineLinksHtml();
+        links.hidden = false;
+      } else {
+        links.hidden = true;
+        links.innerHTML = "";
+      }
+    }
+    progHideTimer = setTimeout(() => { box.hidden = true; }, ok ? 2500 : (showOfflineLinks ? 15000 : 6000));
+  };
+  ctrl.setHint = (h) => { statusHint = h; update(); };
+  return ctrl;
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function fetchViaDirectApi(baseUrl, target) {
+  const res = await fetch(`${baseUrl}/api/refresh?target=${encodeURIComponent(target)}`, { method: "POST" });
+  const j = await res.json();
+  if (!res.ok || !j.ok) throw new Error((j && j.error) || ("HTTP " + res.status));
+  return j;
+}
+
+async function fetchViaRelay(target, stopProg) {
+  const sep = RELAY_API.includes("?") ? "&" : "?";
+  const reqUrl = `${RELAY_API}${sep}action=request&target=${encodeURIComponent(target)}&token=${encodeURIComponent(RELAY_TOKEN)}`;
+  const reqRes = await fetch(reqUrl, { method: "POST", cache: "no-store" });
+  if (!reqRes.ok) throw new Error("RELAY_HTTP_" + reqRes.status);
+  const reqJson = await reqRes.json();
+  if (!reqJson || !reqJson.ok || !reqJson.job_id) throw new Error((reqJson && reqJson.error) || "RELAY_ERR");
+
+  const jobId = reqJson.job_id;
+  if (stopProg && stopProg.setHint) {
+    stopProg.setHint(reqJson.pc_online ? "PCへ取得指示を送信済" : "PC応答待ち…");
+  }
+  const startMs = Date.now();
+  const offlineLimitMs = 20000;
+  const maxWaitMs = 260000;
+
+  while (Date.now() - startMs < maxWaitMs) {
+    await sleep(2000);
+    const stUrl = `${RELAY_API}${sep}action=status&id=${encodeURIComponent(jobId)}&token=${encodeURIComponent(RELAY_TOKEN)}&ts=${Date.now()}`;
+    const stRes = await fetch(stUrl, { cache: "no-store" });
+    if (!stRes.ok) throw new Error("RELAY_HTTP_" + stRes.status);
+    const st = await stRes.json();
+    if (!st || !st.ok) throw new Error((st && st.error) || "RELAY_STATUS_ERR");
+    if (st.status === "done") return st;
+    if (st.status === "error") throw new Error(st.error || "PC側で取得に失敗しました");
+    if (st.status === "running") {
+      if (stopProg && stopProg.setHint) stopProg.setHint("PCで取得中…");
+    } else if (st.status === "pending" && !st.pc_online && (Date.now() - startMs) > offlineLimitMs) {
+      const err = new Error("PC_OFFLINE");
+      err.code = "PC_OFFLINE";
+      throw err;
+    }
+  }
+  throw new Error("取得がタイムアウトしました");
+}
+
+async function refreshService(target, btn) {
+  const meta = REFRESH_META[target] || REFRESH_META.all;
+  const btns = document.querySelectorAll(`[data-fetch-target="${target}"]`);
+  const origTexts = new Map();
+  btns.forEach(b => { origTexts.set(b, b.textContent); b.disabled = true; b.textContent = "↻ 取得中…"; });
+  if (btn && !origTexts.has(btn)) { origTexts.set(btn, btn.textContent); btn.disabled = true; btn.textContent = "↻ 取得中…"; }
+  const stopProg = startProgress(meta.label, meta.estSec);
+  const isLocalHost = location.protocol === "file:" || location.hostname === "127.0.0.1" || location.hostname === "localhost";
+  const customApi = (() => { try { return (localStorage.getItem("ai_usage_api_url") || "").replace(/\/+$/, ""); } catch { return ""; } })();
+  try {
+    let j;
+    if (isLocalHost) {
+      j = await fetchViaDirectApi(LOCAL_API, target);
+    } else if (customApi) {
+      j = await fetchViaDirectApi(customApi, target);
+    } else {
+      j = await fetchViaRelay(target, stopProg);
+    }
+    if (j.data && j.data.services) {
+      DATA = j.data;
+      render();
+    } else {
+      await load();
+    }
+    const warn = j.service_error ? `（注意: ${j.service_error}）` : "";
+    stopProg(true, `${meta.label} の最新情報を更新しました ${warn}`);
+  } catch (e) {
+    await load();
+    if (isLocalHost) {
+      stopProg(false, `PCローカル取得サーバー (127.0.0.1:8768) に接続できませんでした（最終取得時点のデータを表示中）`, true);
+    } else if (e && (e.code === "PC_OFFLINE" || String(e.message || "").includes("RELAY_HTTP_404") || String(e.message || "").includes("Failed to fetch"))) {
+      stopProg(false, `PCがオフラインのため最新取得できません（最終取得時点のデータを表示中）`, true);
+    } else {
+      stopProg(false, `${meta.label} の最新取得に失敗しました: ${(e && e.message) || "不明なエラー"}（最終取得時点のデータを表示中）`, true);
+    }
+  } finally {
+    origTexts.forEach((txt, b) => { b.disabled = false; b.textContent = txt; });
+  }
+}
+
+document.getElementById("reload").addEventListener("click", (ev) => refreshService("all", ev.currentTarget));
 const _htoggle = document.getElementById("htoggle");
 if (_htoggle) _htoggle.addEventListener("click", () => setExpanded(!document.body.classList.contains("expanded")));
 const _hshow5h = document.getElementById("hshow5h");

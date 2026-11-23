@@ -649,6 +649,14 @@ class AIUsageApp:
         self.reload()
         self.loop()
         self.root.after(5000, self.check_resets)
+        try:
+            sys.path.insert(0, os.path.join(os.path.dirname(HERE), "collector"))
+            import api_server
+            httpd = api_server.start_api_server_thread(on_updated=lambda: self.root.after(0, self.reload))
+            if httpd is None:
+                print("api_server: port 8768 already in use or failed to bind")
+        except Exception as e:
+            print(f"api_server start error: {e}")
         if "--test-toast" in sys.argv:
             toast("AI利用枠ウィジェット", "テスト通知: 表示確認用")
 

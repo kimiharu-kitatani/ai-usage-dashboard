@@ -816,6 +816,7 @@ def main():
     ap.add_argument("--no-push", action="store_true")
     ap.add_argument("--debug", action="store_true")
     ap.add_argument("--only", choices=["claude", "codex", "antigravity"])
+    ap.add_argument("--push-only", action="store_true", help="収集は行わず現在の usage.json を git commit & push する")
     ap.add_argument("--try-claude-cli", action="store_true", help='claude -p "/usage" も試す（v2.1.220 では上限値は出ない）')
     ap.add_argument("--throttle-min", type=float, default=0, help="前回実行からこの分数未満なら何もせず終了")
     ap.add_argument("--reason", default="manual", help="ログ用の起動理由")
@@ -835,6 +836,13 @@ def main():
         if not a.no_push:
             touch_stamp()
         log("start (%s)" % a.reason)
+        if a.push_only:
+            try:
+                push(a.out)
+                return 0
+            except Exception as e:
+                log("push error: %s" % e)
+                return 2
         return run(a)
     finally:
         release_lock()

@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+AI使用量ダッシュボード ローカルAPIサーバー (127.0.0.1:8768)
+- index.html (file:// または http://) からの個別更新リクエストを受け付ける
+- target = claude | codex | antigravity | all
+- desktop/widget.pyw のバックグラウンドスレッド、または単体プロセスとして動作
+"""
+import json
+import os
+import subprocess
+import sys
+import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(HERE)
+DATA_JSON = os.path.join(REPO, "data", "usage.json")
+COLLECTOR_PY = os.path.join(HERE, "collector.py")
+CLAUDE_PING_PS1 = os.path.join(HERE, "claude_ping.ps1")
+HOST = "127.0.0.1"
+PORT = 8768
+NO_WINDOW = 0x08000000 if os.name == "nt" else 0
+
+RELAY_URL = os.environ.get("AI_USAGE_RELAY_URL", "https://kick-in.xsrv.jp/ai-usage-relay/relay.php")
+RELAY_TOKEN = os.environ.get("AI_USAGE_RELAY_TOKEN", "aiu_relay_2026_k9m4x7p2")
+RELAY_POLL_SEC = 5
+_RELAY_STARTED = False
+
+_TARGET_LOCKS = {
+    "claude": threading.Lock(),
+    "codex": threading.Lock(),
+    "antigravity": threading.Lock(),
+    "all": threading.Lock(),
+}
+_ON_UPDATED_CB = None
+
+
+def _python_exe():
+    pyw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
+    if os.name == "nt" and os.path.exists(pyw):
+        return pyw
+    return sys.executable or "python"
+
+
+def _read_usage():
+    if not os.path.exists(DATA_JSON):
+        return None
+    try:
+        with open(DATA_JSON, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def _async_git_push():
+    def _run():
+        try:
+            subprocess.run(
+                [_python_exe(), COLLECTOR_PY, "--push-only", "--reason", "web-push"],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                timeout=120,
+                creationflags=NO_WINDOW,
+            )
+        except Exception:
+            pass
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def run_refresh(target: str) -> dict:
+    if target not in _TARGET_LOCKS:
+        return {"ok": False, "error": f"不明な対象です: {target}"}
+
+    lock = _TARGET_LOCKS[target]
+    if not lock.acquire(blocking=False):
+        return {"ok": False, "error": f"{target} は現在取得中です。少し待ってください。"}
+
+    try:
+        py = _python_exe()
+        if target == "claude":
+            cmd = [
+                "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-WindowStyle", "Hidden", "-File", CLAUDE_PING_PS1,
+                "-TimeoutSec", "60", "-OnlyClaude"
+            ]
+            r = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, timeout=240, creationflags=NO_WINDOW)
+        elif target in ("codex", "antigravity"):
+            cmd = [py, COLLECTOR_PY, "--only", target, "--no-push", "--reason", f"web-{target}"]
+            r = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, timeout=120, creationflags=NO_WINDOW)
+        else:  # all
+            cmd = [
+                "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-WindowStyle", "Hidden", "-File", CLAUDE_PING_PS1,
+                "-TimeoutSec", "60"
+            ]
+            r = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, timeout=260, creationflags=NO_WINDOW)
+
+        data = _read_usage()
+        if _ON_UPDATED_CB:
+            try:
+                _ON_UPDATED_CB()
+            except Exception:
+                pass
+
+        _async_git_push()
+
+        svc_data = (data or {}).get("services", {}).get(target) if target != "all" else None
+        svc_err = svc_data.get("error") if isinstance(svc_data, dict) else None
+        return {
+            "ok": True,
+            "target": target,
+            "returncode": r.returncode,
+            "service_error": svc_err,
+            "data": data,
+        }
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "target": target, "error": "取得がタイムアウトしました"}
+    except Exception as e:
+        return {"ok": False, "target": target, "error": str(e)}
+    finally:
+        lock.release()
+
+
+class DashboardAPIHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        pass
+
+    def _send_cors(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
+
+    def _send_json(self, status: int, payload: dict):
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self._send_cors()
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._send_cors()
+        self.end_headers()
+
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/health":
+            self._send_json(200, {"ok": True, "pid": os.getpid()})
+            return
+        if parsed.path in ("/api/status", "/api/usage"):
+            data = _read_usage()
+            self._send_json(200, {"ok": True, "data": data})
+            return
+        self._send_json(404, {"ok": False, "error": "Not Found"})
+
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/refresh":
+            qs = parse_qs(parsed.query)
+            target = (qs.get("target") or ["all"])[0].strip().lower()
+            res = run_refresh(target)
+            self._send_json(200 if res.get("ok") else 500, res)
+            return
+        self._send_json(404, {"ok": False, "error": "Not Found"})
+
+
+def _relay_request(action: str, method: str = "GET", payload: dict = None, timeout: int = 10):
+    if not RELAY_URL:
+        return None
+    sep = "&" if "?" in RELAY_URL else "?"
+    url = f"{RELAY_URL}{sep}action={urllib.parse.quote(action)}&token={urllib.parse.quote(RELAY_TOKEN)}"
+    data = json.dumps(payload, ensure_ascii=False).encode("utf-8") if payload is not None else None
+    headers = {"User-Agent": "ai-usage-dashboard-pc/1.0"}
+    if data is not None:
+        headers["Content-Type"] = "application/json; charset=utf-8"
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _relay_poll_loop():
+    while True:
+        try:
+            res = _relay_request("poll", method="GET", timeout=10)
+            job = (res or {}).get("job") if isinstance(res, dict) else None
+            if isinstance(job, dict) and job.get("id"):
+                job_id = job["id"]
+                target = str(job.get("target") or "all").strip().lower()
+                result = run_refresh(target)
+                _relay_request(
+                    "complete",
+                    method="POST",
+                    payload={
+                        "id": job_id,
+                        "ok": bool(result.get("ok")),
+                        "target": target,
+                        "service_error": result.get("service_error"),
+                        "error": result.get("error"),
+                        "data": result.get("data"),
+                    },
+                    timeout=20,
+                )
+        except Exception:
+            pass
+        time.sleep(RELAY_POLL_SEC)
+
+
+def start_relay_poller():
+    global _RELAY_STARTED
+    if _RELAY_STARTED or not RELAY_URL:
+        return
+    _RELAY_STARTED = True
+    threading.Thread(target=_relay_poll_loop, daemon=True).start()
+
+
+def start_api_server_thread(on_updated=None):
+    """widget.pyw 等からバックグラウンドデーモンスレッドで起動する"""
+    global _ON_UPDATED_CB
+    _ON_UPDATED_CB = on_updated
+    try:
+        httpd = ThreadingHTTPServer((HOST, PORT), DashboardAPIHandler)
+    except OSError:
+        return None
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    start_relay_poller()
+    return httpd
+
+
+if __name__ == "__main__":
+    start_relay_poller()
+    httpd = ThreadingHTTPServer((HOST, PORT), DashboardAPIHandler)
+    print(f"AI Usage Dashboard API server listening on http://{HOST}:{PORT}", flush=True)
+    httpd.serve_forever()
