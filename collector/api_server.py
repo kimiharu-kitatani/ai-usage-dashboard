@@ -174,6 +174,32 @@ class DashboardAPIHandler(BaseHTTPRequestHandler):
         self._send_json(404, {"ok": False, "error": "Not Found"})
 
 
+def _log(msg: str):
+    try:
+        state_dir = os.path.join(os.environ.get("LOCALAPPDATA", HERE), "ai-usage-dashboard")
+        os.makedirs(state_dir, exist_ok=True)
+        log_path = os.path.join(state_dir, "api_server.log")
+        if os.path.exists(log_path) and os.path.getsize(log_path) > 512 * 1024:
+            with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                tail = f.readlines()[-200:]
+            with open(log_path, "w", encoding="utf-8") as f:
+                f.writelines(tail)
+        ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"[{ts}] {msg}\n")
+    except Exception:
+        pass
+
+
+def _is_already_running() -> bool:
+    try:
+        with urllib.request.urlopen(f"http://{HOST}:{PORT}/api/health", timeout=2) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return bool(isinstance(data, dict) and data.get("ok"))
+    except Exception:
+        return False
+
+
 def _relay_request(action: str, method: str = "GET", payload: dict = None, timeout: int = 10):
     if not RELAY_URL:
         return None
@@ -189,13 +215,19 @@ def _relay_request(action: str, method: str = "GET", payload: dict = None, timeo
 
 
 def _relay_poll_loop():
+    last_err = None
+    _log(f"relay poller started: {RELAY_URL}")
     while True:
         try:
             res = _relay_request("poll", method="GET", timeout=10)
+            if last_err is not None:
+                _log("relay poller recovered")
+                last_err = None
             job = (res or {}).get("job") if isinstance(res, dict) else None
             if isinstance(job, dict) and job.get("id"):
                 job_id = job["id"]
                 target = str(job.get("target") or "all").strip().lower()
+                _log(f"relay job received: id={job_id} target={target}")
                 result = run_refresh(target)
                 _relay_request(
                     "complete",
@@ -210,8 +242,12 @@ def _relay_poll_loop():
                     },
                     timeout=20,
                 )
-        except Exception:
-            pass
+                _log(f"relay job completed: id={job_id} ok={bool(result.get('ok'))}")
+        except Exception as e:
+            err_s = str(e)
+            if err_s != last_err:
+                _log(f"relay poll error: {err_s}")
+                last_err = err_s
         time.sleep(RELAY_POLL_SEC)
 
 
@@ -227,10 +263,13 @@ def start_api_server_thread(on_updated=None):
     """widget.pyw 等からバックグラウンドデーモンスレッドで起動する"""
     global _ON_UPDATED_CB
     _ON_UPDATED_CB = on_updated
+    if _is_already_running():
+        return None
     try:
         httpd = ThreadingHTTPServer((HOST, PORT), DashboardAPIHandler)
     except OSError:
         return None
+    _log(f"api_server started in widget thread (pid={os.getpid()})")
     t = threading.Thread(target=httpd.serve_forever, daemon=True)
     t.start()
     start_relay_poller()
@@ -238,7 +277,14 @@ def start_api_server_thread(on_updated=None):
 
 
 if __name__ == "__main__":
+    if _is_already_running():
+        sys.exit(0)
+    try:
+        httpd = ThreadingHTTPServer((HOST, PORT), DashboardAPIHandler)
+    except OSError as e:
+        _log(f"bind failed on {HOST}:{PORT}: {e}")
+        sys.exit(0)
+    _log(f"api_server standalone started (pid={os.getpid()})")
     start_relay_poller()
-    httpd = ThreadingHTTPServer((HOST, PORT), DashboardAPIHandler)
     print(f"AI Usage Dashboard API server listening on http://{HOST}:{PORT}", flush=True)
     httpd.serve_forever()
