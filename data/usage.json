@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-24T17:41:51+09:00",
+  "fetched_at": "2026-11-24T17:52:55+09:00",
   "services": {
     "claude": {
       "five_hour": {
@@ -40,7 +40,7 @@
       },
       "reset_count": 3,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-24T17:41:42+09:00",
+      "as_of": "2026-11-24T17:52:46+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-01T03:56:01+09:00",
       "day_track": {
@@ -52,7 +52,7 @@
       }
     },
     "antigravity": {
-      "as_of": "2026-11-24T17:41:42+09:00",
+      "as_of": "2026-11-24T17:52:46+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini 4 Hydrogen (Medium)",
       "totals": {
@@ -97,7 +97,7 @@
           "five_hour": {
             "used_percent": 0.0,
             "remain_percent": 100.0,
-            "resets_at": "2026-11-24T22:41:47+09:00",
+            "resets_at": "2026-11-24T22:52:51+09:00",
             "prompts": 0,
             "steps": 0,
             "input_tokens": 0,
