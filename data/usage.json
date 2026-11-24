@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-24T09:54:29+09:00",
+  "fetched_at": "2026-11-24T10:13:28+09:00",
   "services": {
     "claude": {
       "five_hour": {
@@ -40,7 +40,7 @@
       },
       "reset_count": 3,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-24T09:54:23+09:00",
+      "as_of": "2026-11-24T10:13:20+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-01T03:56:01+09:00",
       "day_track": {
@@ -52,7 +52,7 @@
       }
     },
     "antigravity": {
-      "as_of": "2026-11-24T09:54:23+09:00",
+      "as_of": "2026-11-24T10:13:20+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini 4 Hydrogen (Medium)",
       "totals": {
@@ -82,12 +82,12 @@
           "used_percent": null,
           "remain_percent": null,
           "resets_at": null,
-          "prompts": 175,
-          "steps": 2359,
-          "input_tokens": 18425318,
-          "output_tokens": 1434399,
-          "cache_read_tokens": 302005805,
-          "total_tokens": 19859717
+          "prompts": 171,
+          "steps": 2298,
+          "input_tokens": 18268444,
+          "output_tokens": 1404992,
+          "cache_read_tokens": 292894032,
+          "total_tokens": 19673436
         }
       },
       "models": [
@@ -120,12 +120,12 @@
             "used_percent": 5.0,
             "remain_percent": 95.0,
             "resets_at": "2026-12-01T08:26:50+09:00",
-            "prompts": 158,
-            "steps": 2259,
-            "input_tokens": 17110787,
-            "output_tokens": 1370061,
-            "cache_read_tokens": 290223790,
-            "total_tokens": 18480848
+            "prompts": 154,
+            "steps": 2198,
+            "input_tokens": 16953913,
+            "output_tokens": 1340654,
+            "cache_read_tokens": 281112017,
+            "total_tokens": 18294567
           },
           "last_used_at": "2026-11-24T09:53:12+09:00",
           "day_track": {
@@ -181,7 +181,8 @@
               "3": 61.0,
               "4": 61.0,
               "5": 61.0,
-              "6": 61.0
+              "6": 61.0,
+              "7": 100.0
             },
             "last_weekly_used": 100.0
           }
