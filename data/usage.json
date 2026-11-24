@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-24T13:25:00+09:00",
+  "fetched_at": "2026-11-24T13:43:33+09:00",
   "services": {
     "claude": {
       "five_hour": {
@@ -40,7 +40,7 @@
       },
       "reset_count": 3,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-24T13:24:53+09:00",
+      "as_of": "2026-11-24T13:43:25+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-01T03:56:01+09:00",
       "day_track": {
@@ -52,7 +52,7 @@
       }
     },
     "antigravity": {
-      "as_of": "2026-11-24T13:24:53+09:00",
+      "as_of": "2026-11-24T13:43:25+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini 4 Hydrogen (Medium)",
       "totals": {
@@ -60,12 +60,12 @@
           "used_percent": null,
           "remain_percent": null,
           "resets_at": null,
-          "prompts": 23,
-          "steps": 161,
-          "input_tokens": 1156116,
-          "output_tokens": 168799,
-          "cache_read_tokens": 14301114,
-          "total_tokens": 1324915
+          "prompts": 21,
+          "steps": 118,
+          "input_tokens": 795894,
+          "output_tokens": 126849,
+          "cache_read_tokens": 11174593,
+          "total_tokens": 922743
         },
         "today": {
           "used_percent": null,
@@ -95,15 +95,15 @@
           "key": "agy_gemini_models",
           "name": "Gemini Models",
           "five_hour": {
-            "used_percent": 18.0,
-            "remain_percent": 82.0,
-            "resets_at": "2026-11-24T13:26:50+09:00",
-            "prompts": 23,
-            "steps": 161,
-            "input_tokens": 1156116,
-            "output_tokens": 168799,
-            "cache_read_tokens": 14301114,
-            "total_tokens": 1324915
+            "used_percent": 0.0,
+            "remain_percent": 100.0,
+            "resets_at": "2026-11-24T18:26:50+09:00",
+            "prompts": 21,
+            "steps": 118,
+            "input_tokens": 795894,
+            "output_tokens": 126849,
+            "cache_read_tokens": 11174593,
+            "total_tokens": 922743
           },
           "today": {
             "used_percent": null,
