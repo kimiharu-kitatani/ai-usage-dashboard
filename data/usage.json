@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-24T13:43:33+09:00",
+  "fetched_at": "2026-11-24T17:13:26+09:00",
   "services": {
     "claude": {
       "five_hour": {
@@ -31,16 +31,16 @@
     },
     "codex": {
       "five_hour": {
-        "used_percent": 99.0,
-        "resets_at": "2026-11-24T14:19:14+09:00"
+        "used_percent": 7.0,
+        "resets_at": "2026-11-24T22:12:05+09:00"
       },
       "weekly": {
-        "used_percent": 15.0,
+        "used_percent": 17.0,
         "resets_at": "2026-12-01T09:19:14+09:00"
       },
       "reset_count": 3,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-24T13:43:25+09:00",
+      "as_of": "2026-11-24T17:13:12+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-01T03:56:01+09:00",
       "day_track": {
@@ -48,11 +48,11 @@
         "day_start_used": {
           "1": 0.0
         },
-        "last_weekly_used": 15.0
+        "last_weekly_used": 17.0
       }
     },
     "antigravity": {
-      "as_of": "2026-11-24T13:43:25+09:00",
+      "as_of": "2026-11-24T17:13:12+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini 4 Hydrogen (Medium)",
       "totals": {
@@ -60,12 +60,12 @@
           "used_percent": null,
           "remain_percent": null,
           "resets_at": null,
-          "prompts": 21,
-          "steps": 118,
-          "input_tokens": 795894,
-          "output_tokens": 126849,
-          "cache_read_tokens": 11174593,
-          "total_tokens": 922743
+          "prompts": 0,
+          "steps": 0,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cache_read_tokens": 0,
+          "total_tokens": 0
         },
         "today": {
           "used_percent": null,
@@ -97,13 +97,13 @@
           "five_hour": {
             "used_percent": 0.0,
             "remain_percent": 100.0,
-            "resets_at": "2026-11-24T18:26:50+09:00",
-            "prompts": 21,
-            "steps": 118,
-            "input_tokens": 795894,
-            "output_tokens": 126849,
-            "cache_read_tokens": 11174593,
-            "total_tokens": 922743
+            "resets_at": "2026-11-24T22:13:22+09:00",
+            "prompts": 0,
+            "steps": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "total_tokens": 0
           },
           "today": {
             "used_percent": null,
