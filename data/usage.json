@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-26T09:28:52+09:00",
+  "fetched_at": "2026-11-26T09:34:11+09:00",
   "services": {
     "claude": {
       "five_hour": {
@@ -13,7 +13,7 @@
       },
       "reset_count": null,
       "source": "Claude Code statusline (最後に Claude Code を使った時点の値)",
-      "as_of": "2026-11-26T09:28:27+09:00",
+      "as_of": "2026-11-26T09:34:08+09:00",
       "error": null,
       "auth_expired": false,
       "day_track": {
