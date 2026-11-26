@@ -1,5 +1,4 @@
 # AI Usage Dashboard: register independent API server + relay poller watchdog task
-# Also ensures LaunchAIWidget runs at logon with no 72h execution limit.
 param([string]$TaskName = "AIUsage_APIServer")
 $ErrorActionPreference = "Stop"
 
@@ -36,21 +35,5 @@ $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -Ru
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($tLogon, $tWatch) -Settings $settings -Principal $principal `
     -Description "AI usage dashboard: background API server (127.0.0.1:8768) and Xserver relay poller with 5-min watchdog" -Force | Out-Null
-
-# Also ensure LaunchAIWidget has AtLogOn trigger and no 72h timeout
-$wTask = Get-ScheduledTask -TaskName "LaunchAIWidget" -ErrorAction SilentlyContinue
-if ($wTask) {
-    $wLogon = New-ScheduledTaskTrigger -AtLogOn -User $user
-    $wLogon.Delay = "PT10S"
-    $wSettings = New-ScheduledTaskSettingsSet `
-        -AllowStartIfOnBatteries `
-        -DontStopIfGoingOnBatteries `
-        -StartWhenAvailable `
-        -ExecutionTimeLimit (New-TimeSpan -Seconds 0) `
-        -RestartCount 3 `
-        -RestartInterval (New-TimeSpan -Minutes 1) `
-        -MultipleInstances IgnoreNew
-    Set-ScheduledTask -TaskName "LaunchAIWidget" -Trigger $wLogon -Settings $wSettings | Out-Null
-}
 
 Write-Host "Registered: $TaskName (AtLogOn + 5-min watchdog, unlimited runtime). Python: $pyw"

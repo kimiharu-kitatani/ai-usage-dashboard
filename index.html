@@ -79,6 +79,19 @@
   .err { color: var(--bad); font-size: 10px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .note:empty, .err:empty, .src:empty, .sub:empty { display: none; }
   .actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  /* Claude Code ログイン切れ警告バナー */
+  .auth-warn { background: color-mix(in srgb, #ef4444 12%, var(--card)); border: 1.5px solid #ef4444; border-radius: 9px; padding: 8px 10px; margin-bottom: 6px; font-size: 12px; line-height: 1.45; box-sizing: border-box; max-width: 100%; }
+  .auth-warn-title { color: #dc2626; font-weight: 800; font-size: 12.5px; margin-bottom: 3px; }
+  @media (prefers-color-scheme: dark) { .auth-warn-title { color: #fca5a5; } }
+  .auth-warn-desc { color: var(--text); font-size: 11px; margin-bottom: 6px; }
+  .auth-warn-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .btn-relogin { background: #dc2626; color: #fff; border-color: #dc2626; font-weight: 700; }
+  .btn-relogin:hover { filter: brightness(1.08); }
+  .btn-relogin:disabled { opacity: .6; cursor: wait; }
+  .auth-warn-status { font-size: 11px; font-weight: 600; color: var(--text); }
+  .auth-cmd-box { display: flex; align-items: center; gap: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; max-width: 100%; box-sizing: border-box; }
+  .auth-cmd-code { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10.5px; color: var(--text); word-break: break-all; overflow-wrap: anywhere; user-select: all; }
+  .auth-cmd-copy { flex: none; font-size: 10.5px; padding: 2px 7px; }
   /* 進行状況スライダーバー */
   #prog-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 9999; background: #111827; color: #fff; padding: 8px 14px 10px; box-shadow: 0 3px 12px rgba(0,0,0,.4); }
   #prog-banner[hidden] { display: none; }
@@ -1206,7 +1219,62 @@ function render() {
     const errEl = node.querySelector(".err");
     const asOfD = toDate(auto.as_of);
     if (!noAuto && asOfD && (Date.now() - asOfD) / 3600000 > 6) node.querySelector(".note").textContent = "古い値（" + fmt(asOfD) + " 時点）";
-    if (s.key === "claude" && noAuto) {
+    if (s.key === "claude" && auto.auth_expired === true) {
+      const warnBox = document.createElement("div");
+      warnBox.className = "auth-warn";
+      const isLocal = location.protocol === "file:" || location.hostname === "127.0.0.1" || location.hostname === "localhost";
+      warnBox.innerHTML =
+        '<div class="auth-warn-title">⚠ Claude Code のログインが切れています</div>' +
+        '<div class="auth-warn-desc">再ログイン完了後に「↻ 最新取得」を押してください。</div>' +
+        (isLocal ? '<div class="auth-warn-actions"><button type="button" class="btn-relogin">🔑 再ログイン</button><span class="auth-warn-status"></span></div>' : '') +
+        '<div class="auth-cmd-box"><code class="auth-cmd-code">claude auth login</code><button type="button" class="auth-cmd-copy">📋 コピー</button></div>';
+      const cmdCode = warnBox.querySelector(".auth-cmd-code");
+      const copyBtn = warnBox.querySelector(".auth-cmd-copy");
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(cmdCode.textContent);
+        } catch {
+          const ta = document.createElement("textarea");
+          ta.value = cmdCode.textContent;
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand("copy"); } catch {}
+          ta.remove();
+        }
+        const orig = copyBtn.textContent;
+        copyBtn.textContent = "✓ コピー済";
+        setTimeout(() => { copyBtn.textContent = orig; }, 1800);
+      });
+      if (isLocal) {
+        const apiBase = (() => { try { return (localStorage.getItem("ai_usage_api_url") || "").replace(/\/+$/, "") || LOCAL_API; } catch { return LOCAL_API; } })();
+        fetch(`${apiBase}/api/claude-login`).then(r => r.ok ? r.json() : null).then(j => {
+          if (j && j.command) cmdCode.textContent = j.command;
+        }).catch(() => {});
+        const reloginBtn = warnBox.querySelector(".btn-relogin");
+        const statusEl = warnBox.querySelector(".auth-warn-status");
+        reloginBtn.addEventListener("click", async () => {
+          reloginBtn.disabled = true;
+          const orig = reloginBtn.textContent;
+          reloginBtn.textContent = "起動中…";
+          statusEl.textContent = "";
+          try {
+            const res = await fetch(`${apiBase}/api/claude-login`, { method: "POST" });
+            const j = await res.json();
+            if (j && j.command) cmdCode.textContent = j.command;
+            if (!res.ok || !j.ok) throw new Error((j && j.error) || ("HTTP " + res.status));
+            statusEl.textContent = j.message || "認証画面を起動しました。ログイン完了後に「↻ 最新取得」を押してください。";
+          } catch (e) {
+            statusEl.textContent = "起動に失敗しました（下のコマンドを手動で実行してください）";
+          } finally {
+            reloginBtn.disabled = false;
+            reloginBtn.textContent = orig;
+          }
+        });
+      }
+      node.insertBefore(warnBox, rows);
+      node.querySelector(".note").textContent = man ? "再ログインが必要です（手入力値を表示中）" : "再ログインが必要です";
+      errEl.textContent = "";
+    } else if (s.key === "claude" && noAuto) {
       node.querySelector(".note").textContent = man ? "自動取得不可・手入力値を表示" : "自動取得不可・手入力で表示";
       errEl.textContent = "";
     } else {

@@ -26,6 +26,11 @@ CLAUDE_PING_PS1 = os.path.join(HERE, "claude_ping.ps1")
 HOST = "127.0.0.1"
 PORT = 8768
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
+CREATE_NEW_CONSOLE = 0x00000010 if os.name == "nt" else 0
+
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+from collector import find_claude_exe  # noqa: E402
 
 RELAY_URL = os.environ.get("AI_USAGE_RELAY_URL", "https://kick-in.xsrv.jp/ai-usage-relay/relay.php")
 RELAY_TOKEN = os.environ.get("AI_USAGE_RELAY_TOKEN", "aiu_relay_2026_k9m4x7p2")
@@ -127,6 +132,35 @@ def run_refresh(target: str) -> dict:
         lock.release()
 
 
+def get_claude_login_command() -> dict:
+    exe = find_claude_exe()
+    if not exe:
+        return {"ok": False, "command": "claude auth login", "error": "claude.exe が見つかりません"}
+    return {"ok": True, "command": f'"{exe}" auth login', "exe": exe}
+
+
+def start_claude_login() -> dict:
+    info = get_claude_login_command()
+    if not info.get("ok"):
+        return info
+    exe = info["exe"]
+    try:
+        proc = subprocess.Popen(
+            [exe, "auth", "login"],
+            creationflags=CREATE_NEW_CONSOLE,
+        )
+        _log(f"started claude auth login (pid={proc.pid})")
+        return {
+            "ok": True,
+            "started": True,
+            "pid": proc.pid,
+            "command": info["command"],
+            "message": "Claude Code の認証画面を起動しました。ログイン完了後に「↻ 最新取得」を押してください。",
+        }
+    except Exception as e:
+        return {"ok": False, "command": info["command"], "error": f"起動に失敗しました: {e}"}
+
+
 class DashboardAPIHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
@@ -161,6 +195,12 @@ class DashboardAPIHandler(BaseHTTPRequestHandler):
             data = _read_usage()
             self._send_json(200, {"ok": True, "data": data})
             return
+        if parsed.path == "/api/claude-login":
+            if self.client_address[0] not in ("127.0.0.1", "::1"):
+                self._send_json(403, {"ok": False, "error": "Forbidden"})
+                return
+            self._send_json(200, get_claude_login_command())
+            return
         self._send_json(404, {"ok": False, "error": "Not Found"})
 
     def do_POST(self):
@@ -169,6 +209,13 @@ class DashboardAPIHandler(BaseHTTPRequestHandler):
             qs = parse_qs(parsed.query)
             target = (qs.get("target") or ["all"])[0].strip().lower()
             res = run_refresh(target)
+            self._send_json(200 if res.get("ok") else 500, res)
+            return
+        if parsed.path == "/api/claude-login":
+            if self.client_address[0] not in ("127.0.0.1", "::1"):
+                self._send_json(403, {"ok": False, "error": "Forbidden"})
+                return
+            res = start_claude_login()
             self._send_json(200 if res.get("ok") else 500, res)
             return
         self._send_json(404, {"ok": False, "error": "Not Found"})

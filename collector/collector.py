@@ -424,8 +424,61 @@ def parse_claude_usage(text):
     return out
 
 
+def find_claude_exe():
+    if IS_WIN:
+        appdata = os.environ.get("APPDATA") or os.path.expanduser("~/AppData/Roaming")
+        desktop_dir = os.path.join(appdata, "Claude", "claude-code")
+        if os.path.isdir(desktop_dir):
+            cands = glob.glob(os.path.join(desktop_dir, "**", "claude.exe"), recursive=True)
+            if cands:
+                cands.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+                return cands[0]
+    p = find_exe("claude")
+    if p:
+        return p
+    if IS_WIN:
+        appdata = os.environ.get("APPDATA") or os.path.expanduser("~/AppData/Roaming")
+        npm_exe = os.path.join(appdata, "npm", "node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe")
+        if os.path.exists(npm_exe):
+            return npm_exe
+    return None
+
+
+def check_claude_auth(exe=None):
+    """claude auth status を確認し、(logged_in: bool|None, exe: str|None) を返す"""
+    exe = exe or find_claude_exe()
+    if not exe:
+        return None, None
+    try:
+        r = subprocess.run(
+            [exe, "auth", "status"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            timeout=15,
+            creationflags=NO_WINDOW,
+        )
+        out = r.stdout.decode("utf-8", "replace").strip()
+        err = r.stderr.decode("utf-8", "replace").strip()
+        dbg("claude auth status", f"exit={r.returncode} out={out[:500]} err={err[:300]}")
+        try:
+            data = json.loads(out)
+            if isinstance(data, dict):
+                if data.get("loggedIn") is False or data.get("authMethod") == "none":
+                    return False, exe
+                if data.get("loggedIn") is True:
+                    return True, exe
+        except Exception:
+            pass
+        low = (out + "\n" + err).lower()
+        if any(k in low for k in ("not logged in", "please log in", "auth login", '"loggedin": false')):
+            return False, exe
+    except Exception as e:
+        dbg("claude auth status error", e)
+    return None, exe
+
+
 def claude_via_cli(timeout=120):
-    exe = find_exe("claude")
+    exe = find_claude_exe()
     if not exe:
         raise RuntimeError("claude コマンドが見つかりません")
     env = dict(os.environ)
@@ -470,6 +523,7 @@ def collect_claude():
 def collect_claude_cli(svc, errors):
     # 注: Claude Code v2.1.220 (Windows) では `claude -p "/usage"` は利用上限ではなく
     # セッションのコスト集計（Total cost: ...）しか出力しないことを確認済み。既定では無効。
+    svc["auth_expired"] = False
     try:
         text = claude_via_cli()
         parsed = parse_claude_usage(text)
@@ -494,6 +548,8 @@ def collect_claude_cli(svc, errors):
 
 
 def collect_claude_statusline(svc, errors):
+    logged_in, _ = check_claude_auth()
+    svc["auth_expired"] = (logged_in is False)
     try:
         cap, res = claude_via_statusline_cache()
         for key in ("five_hour", "weekly"):
@@ -504,7 +560,10 @@ def collect_claude_statusline(svc, errors):
         drop_expired(svc, errors)
     except Exception as e:
         errors.append(str(e))
-    svc["error"] = " / ".join(errors) if errors else None
+    if svc["auth_expired"]:
+        svc["error"] = "Claude Code のログインが切れています。再ログインしてください"
+    else:
+        svc["error"] = " / ".join(errors) if errors else None
     return svc
 
 

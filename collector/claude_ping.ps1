@@ -77,13 +77,26 @@ function Invoke-ClaudeStatuslinePing {
   }
   return $ok
 }
-$ok = Invoke-ClaudeStatuslinePing -BeforeUtc $before -Seconds $TimeoutSec
-if (-not $ok) {
-  L 'statusline updated=False; retrying once'
-  $before2 = if (Test-Path -LiteralPath $cachePath) { (Get-Item -LiteralPath $cachePath).LastWriteTimeUtc } else { [datetime]::MinValue }
-  $ok = Invoke-ClaudeStatuslinePing -BeforeUtc $before2 -Seconds ([Math]::Max(25, [int]($TimeoutSec / 2)))
+$authOk = $true
+try {
+  $authOut = & $claude auth status 2>&1 | Out-String
+  $authJson = $authOut | ConvertFrom-Json -ErrorAction Stop
+  if ($authJson.loggedIn -eq $false -or $authJson.authMethod -eq 'none') {
+    $authOk = $false
+  }
+} catch {}
+
+if (-not $authOk) {
+  L 'claude auth status: loggedIn=False (skipping ping)'
+} else {
+  $ok = Invoke-ClaudeStatuslinePing -BeforeUtc $before -Seconds $TimeoutSec
+  if (-not $ok) {
+    L 'statusline updated=False; retrying once'
+    $before2 = if (Test-Path -LiteralPath $cachePath) { (Get-Item -LiteralPath $cachePath).LastWriteTimeUtc } else { [datetime]::MinValue }
+    $ok = Invoke-ClaudeStatuslinePing -BeforeUtc $before2 -Seconds ([Math]::Max(25, [int]($TimeoutSec / 2)))
+  }
+  L ('statusline updated={0}' -f $ok)
 }
-L ('statusline updated={0}' -f $ok)
 # wait (max 90s) if another collector holds the lock, so fresh statusline is not skipped
 $lock = Join-Path $state 'collector.lock'
 for ($i = 0; $i -lt 45 -and (Test-Path -LiteralPath $lock); $i++) { Start-Sleep -Seconds 2 }
