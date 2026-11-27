@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-27T23:31:56+09:00",
+  "fetched_at": "2026-11-27T23:44:54+09:00",
   "services": {
     "claude": {
       "five_hour": {
@@ -27,16 +27,16 @@
     },
     "codex": {
       "five_hour": {
-        "used_percent": 34.0,
+        "used_percent": 81.0,
         "resets_at": "2026-11-28T03:11:40+09:00"
       },
       "weekly": {
-        "used_percent": 14.0,
+        "used_percent": 21.0,
         "resets_at": "2026-12-02T20:38:43+09:00"
       },
       "reset_count": 3,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-27T23:31:43+09:00",
+      "as_of": "2026-11-27T23:44:46+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-02T05:38:23+09:00",
       "day_track": {
@@ -46,11 +46,11 @@
           "2": 8.0,
           "3": 8.0
         },
-        "last_weekly_used": 14.0
+        "last_weekly_used": 21.0
       }
     },
     "antigravity": {
-      "as_of": "2026-11-27T23:31:43+09:00",
+      "as_of": "2026-11-27T23:44:46+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini 4 Neon (XHigh)",
       "totals": {
