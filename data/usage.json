@@ -1,19 +1,19 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-27T09:51:46+09:00",
+  "fetched_at": "2026-11-27T10:02:50+09:00",
   "services": {
     "claude": {
       "five_hour": {
-        "used_percent": 5.0,
+        "used_percent": 9.0,
         "resets_at": "2026-11-27T14:20:00+09:00"
       },
       "weekly": {
-        "used_percent": 41.0,
+        "used_percent": 42.0,
         "resets_at": "2026-11-30T09:00:00+09:00"
       },
       "reset_count": null,
       "source": "Claude Code statusline (最後に Claude Code を使った時点の値)",
-      "as_of": "2026-11-27T09:26:18+09:00",
+      "as_of": "2026-11-27T09:51:37+09:00",
       "error": null,
       "auth_expired": false,
       "day_track": {
@@ -22,25 +22,25 @@
           "4": null,
           "5": 41.0
         },
-        "last_weekly_used": 41.0
+        "last_weekly_used": 42.0
       }
     },
     "codex": {
       "five_hour": {
         "used_percent": 0.0,
-        "resets_at": "2026-11-27T14:51:33+09:00"
+        "resets_at": "2026-11-27T15:02:37+09:00"
       },
       "weekly": {
         "used_percent": 8.0,
-        "resets_at": "2026-12-02T20:38:43+09:00"
+        "resets_at": "2026-12-02T20:38:44+09:00"
       },
       "reset_count": 3,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-27T09:51:38+09:00",
+      "as_of": "2026-11-27T10:02:42+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-02T05:38:23+09:00",
       "day_track": {
-        "week_start": "2026-11-25T20:38:43+09:00",
+        "week_start": "2026-11-25T20:38:44+09:00",
         "day_start_used": {
           "1": 0.0,
           "2": 8.0
@@ -49,7 +49,7 @@
       }
     },
     "antigravity": {
-      "as_of": "2026-11-27T09:51:38+09:00",
+      "as_of": "2026-11-27T10:02:42+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini Flash",
       "totals": {
@@ -94,7 +94,7 @@
           "five_hour": {
             "used_percent": 0.0,
             "remain_percent": 100.0,
-            "resets_at": "2026-11-27T14:51:39+09:00",
+            "resets_at": "2026-11-27T15:02:43+09:00",
             "prompts": 0,
             "steps": 0,
             "input_tokens": 0,
