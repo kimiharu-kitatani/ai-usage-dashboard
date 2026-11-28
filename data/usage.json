@@ -1,19 +1,19 @@
 {
   "schema": 1,
-  "fetched_at": "2026-11-28T22:47:22+09:00",
+  "fetched_at": "2026-11-28T23:01:28+09:00",
   "services": {
     "claude": {
       "five_hour": {
-        "used_percent": 56.0,
+        "used_percent": 60.0,
         "resets_at": "2026-11-29T01:40:00+09:00"
       },
       "weekly": {
-        "used_percent": 60.0,
+        "used_percent": 61.0,
         "resets_at": "2026-11-30T09:00:00+09:00"
       },
       "reset_count": null,
       "source": "Claude Code statusline (最後に Claude Code を使った時点の値)",
-      "as_of": "2026-11-28T22:39:07+09:00",
+      "as_of": "2026-11-28T22:50:46+09:00",
       "error": null,
       "auth_expired": false,
       "day_track": {
@@ -23,21 +23,21 @@
           "5": 41.0,
           "6": 53.0
         },
-        "last_weekly_used": 60.0
+        "last_weekly_used": 61.0
       }
     },
     "codex": {
       "five_hour": {
-        "used_percent": 74.0,
+        "used_percent": 88.0,
         "resets_at": "2026-11-29T02:05:53+09:00"
       },
       "weekly": {
-        "used_percent": 33.0,
+        "used_percent": 36.0,
         "resets_at": "2026-12-02T20:38:43+09:00"
       },
       "reset_count": 3,
       "source": "codex app-server account/rateLimits/read",
-      "as_of": "2026-11-28T22:47:14+09:00",
+      "as_of": "2026-11-28T23:01:20+09:00",
       "error": null,
       "reset_count_expires_at": "2026-12-02T05:38:23+09:00",
       "day_track": {
@@ -48,11 +48,11 @@
           "3": 8.0,
           "4": 21.0
         },
-        "last_weekly_used": 33.0
+        "last_weekly_used": 36.0
       }
     },
     "antigravity": {
-      "as_of": "2026-11-28T22:47:14+09:00",
+      "as_of": "2026-11-28T23:01:20+09:00",
       "source": "agy -p /usage",
       "current_model": "Gemini 4 Neon (XHigh)",
       "totals": {
